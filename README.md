@@ -72,4 +72,6 @@ Deployment stays off until you add these in GitHub → **Settings → Secrets an
 | Variable | `FTP_SERVER_DIR` | the subdomain folder as seen by that FTP account, ending in `/` (e.g. `domains/velouraone.in/public_html/billiards/`, or `./` for an FTP account rooted there) |
 | Variable (optional) | `FTP_PROTOCOL` | `ftps` (default) or `ftp` |
 
+**Fresh reinstall:** GitHub → Actions → **CI / Deploy** → **Run workflow** → tick **clean_slate**. This deletes everything in `FTP_SERVER_DIR` (including `data/`, the live SQLite database) before uploading. Normal pushes never delete anything.
+
 Time zone (used for month boundaries) is set in `backend/config.php` (`Asia/Kolkata` by default).

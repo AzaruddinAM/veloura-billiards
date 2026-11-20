@@ -10,6 +10,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      clean_slate:
+        description: 'Delete EVERYTHING in the server folder first (including data/ — the live SQLite database), then upload a fresh copy'
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -102,10 +107,13 @@ jobs:
           local-dir: release/
           # Folder on the server that holds .htaccess, public/, src/, data/… (the subdomain folder) — must end with a slash.
           server-dir: ${{ vars.FTP_SERVER_DIR }}
-          # Never touch the live database or the server-only config.
+          # Normal deploys never touch the live database or the server-only config.
           exclude: |
             **/data/*.sqlite*
             **/config.local.php
+          # Manual runs can wipe the folder first (Actions → CI / Deploy → Run workflow → clean slate).
+          dangerous-clean-slate: ${{ github.event_name == 'workflow_dispatch' && inputs.clean_slate }}
+          log-level: standard
 
       - name: Check the live site
         if: steps.cfg.outputs.ready == 'true'
