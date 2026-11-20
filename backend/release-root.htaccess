@@ -1,0 +1,18 @@
+# Veloura Billiards — placed at the top of the release folder.
+# Lets the subdomain's document root point at this folder (the hosting default):
+# every request is served from public/, and server-side files stay private.
+Options -Indexes
+DirectoryIndex index.php index.html
+
+RewriteEngine On
+
+# Pass the Authorization header through to PHP (needed for API sign-in on some hosts)
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Never serve config, source, schema or the database directly
+RewriteRule ^(config[^/]*\.php|src/|database/|data/) - [F,L]
+
+# Everything else is served from public/
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteRule ^(.*)$ public/$1 [L]

@@ -37,41 +37,39 @@ Change these passwords right away in **Admin → Staff**.
 2. In `backend/config.php` set `'driver' => 'mysql'` and your credentials (or set the env vars `VB_DB_DRIVER=mysql`, `VB_DB_HOST`, `VB_DB_NAME`, `VB_DB_USER`, `VB_DB_PASS`).
 3. Tables and seed data are created automatically on the first API call.
 
-## Deploy (billiards.veloura.in)
+## Deploy (billiards.velouraone.in on Hostinger)
 ```bash
 bash build-release.sh
 ```
-This builds Angular and assembles `release/`:
+This builds Angular and assembles `release/` (also attached to every GitHub Actions run):
 
 ```
 release/
-  public/   ← set the domain's document root here (index.php, .htaccess, Angular app)
+  .htaccess  ← serves everything from public/ and blocks config, src/, database/, data/
+  public/    ← index.php, Angular app
   src/  database/  data/  config.php  config.local.example.php
 ```
 
-1. Upload the contents of `release/` to the server (needs **PHP 8.1+** with `pdo_sqlite` or `pdo_mysql`, Apache with `mod_rewrite`, or nginx routing all paths to `public/index.php`).
-2. Point the document root of `billiards.veloura.in` at `release/public` and enable HTTPS.
-3. Using MySQL? Copy `config.local.example.php` to `config.local.php` on the server and fill in the credentials (that file is git-ignored). With SQLite, just make `data/` writable by PHP.
-4. Add a DNS record for `billiards` (A record to the server IP, or CNAME to the host) at your domain registrar.
-5. Open the site, sign in as `admin / admin123` and **change both default passwords immediately** in Admin → Staff.
+1. Upload the **contents** of `release/` into the subdomain's folder in hPanel → File Manager, so `.htaccess`, `public/`, `src/`… sit directly inside it. The root `.htaccess` makes this work with Hostinger's default document root; you don't need to change it.
+2. Requirements: **PHP 8.1+** (hPanel → Advanced → PHP Configuration) with `pdo_sqlite` or `pdo_mysql`.
+3. SQLite (default): `data/` must be writable by PHP. MySQL: copy `config.local.example.php` to `config.local.php` on the server and fill in the database created in hPanel (that file is git-ignored).
+4. Open https://billiards.velouraone.in, sign in as `admin / admin123` and **change both default passwords immediately** in Admin → Staff.
 
 ## Continuous deployment (GitHub Actions)
 
 `.github/workflows/ci-cd.yml` runs on every push and pull request:
 
 1. **Build & test:** lints all PHP, runs `build-release.sh`, then `.github/scripts/smoke-test.sh` against the built release (app pages, sign-in, timers and billing, member accounts, month end, staff/admin roles). The ready-to-upload `release/` is attached to the run as an artifact.
-2. **Deploy** (pushes to `main` only): uploads `release/` to cPanel over FTPS. Only changed files are sent, and the live database (`data/*.sqlite`) and `config.local.php` are never touched.
+2. **Deploy** (pushes to `main` only): uploads `release/` to Hostinger over FTPS. Only changed files are sent, and the live database (`data/*.sqlite`) and `config.local.php` are never touched.
 
 Deployment stays off until you add these in GitHub → **Settings → Secrets and variables → Actions**:
 
 | Kind | Name | Value |
 |---|---|---|
-| Secret | `FTP_SERVER` | cPanel FTP host, e.g. `ftp.veloura.in` |
-| Secret | `FTP_USERNAME` | FTP account (cPanel → FTP Accounts) |
+| Secret | `FTP_SERVER` | FTP host from hPanel → Files → FTP Accounts (an IP or `ftp.velouraone.in`) |
+| Secret | `FTP_USERNAME` | FTP username from the same page |
 | Secret | `FTP_PASSWORD` | its password |
-| Variable (optional) | `FTP_SERVER_DIR` | folder holding `public/`, default `billiards.veloura.in/` (must end with `/`) |
-| Variable (optional) | `FTP_PROTOCOL` | `ftps` (default) or `ftp` if your host has no FTPS |
-
-Tip: create an FTP account in cPanel whose home directory is the subdomain folder, then set `FTP_SERVER_DIR` to `./`.
+| Variable | `FTP_SERVER_DIR` | the subdomain folder as seen by that FTP account, ending in `/` (e.g. `domains/velouraone.in/public_html/billiards/`, or `./` for an FTP account rooted there) |
+| Variable (optional) | `FTP_PROTOCOL` | `ftps` (default) or `ftp` |
 
 Time zone (used for month boundaries) is set in `backend/config.php` (`Asia/Kolkata` by default).

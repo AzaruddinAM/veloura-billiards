@@ -18,7 +18,7 @@ $config = [
     'timezone'        => getenv('VB_TZ') ?: 'Asia/Kolkata',
     'token_ttl_hours' => 24 * 7,
     // Origins allowed to call the API from another origin (Angular dev server).
-    // In production the app and API share https://billiards.veloura.in, so CORS isn't needed.
+    // In production the app and API share https://billiards.velouraone.in, so CORS isn't needed.
     'cors_origins'    => ['http://localhost:4200', 'http://127.0.0.1:4200'],
 ];
 

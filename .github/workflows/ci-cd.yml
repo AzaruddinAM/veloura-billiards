@@ -2,7 +2,7 @@ name: CI / Deploy
 
 # Every push and pull request: lint PHP, build the Angular app, assemble release/,
 # and run an end-to-end API smoke test against it.
-# Pushes to main then deploy release/ to cPanel over FTPS — once the FTP secrets are set
+# Pushes to main then deploy release/ to Hostinger over FTPS — once the FTP secrets are set
 # (see README → "Continuous deployment").
 
 on:
@@ -56,14 +56,14 @@ jobs:
           retention-days: 14
 
   deploy:
-    name: Deploy to billiards.veloura.in
+    name: Deploy to billiards.velouraone.in
     needs: build
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
       name: production
-      url: https://billiards.veloura.in
+      url: https://billiards.velouraone.in
     concurrency:
       group: deploy-production
       cancel-in-progress: false
@@ -74,12 +74,13 @@ jobs:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ vars.FTP_SERVER_DIR }}
         run: |
-          if [ -n "$FTP_SERVER" ] && [ -n "$FTP_USERNAME" ] && [ -n "$FTP_PASSWORD" ]; then
+          if [ -n "$FTP_SERVER" ] && [ -n "$FTP_USERNAME" ] && [ -n "$FTP_PASSWORD" ] && [ -n "$FTP_SERVER_DIR" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Deploy skipped::Add FTP_SERVER, FTP_USERNAME and FTP_PASSWORD secrets to deploy to cPanel."
+            echo "::notice title=Deploy skipped::Add FTP_SERVER, FTP_USERNAME, FTP_PASSWORD secrets and the FTP_SERVER_DIR variable to deploy."
           fi
 
       - name: Download release bundle
@@ -89,7 +90,7 @@ jobs:
           name: veloura-billiards-release
           path: release
 
-      - name: Upload to cPanel over FTPS
+      - name: Upload to Hostinger over FTPS
         if: steps.cfg.outputs.ready == 'true'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
@@ -99,8 +100,8 @@ jobs:
           protocol: ${{ vars.FTP_PROTOCOL || 'ftps' }}
           port: ${{ vars.FTP_PORT || 21 }}
           local-dir: release/
-          # Folder on the server that holds public/, src/, data/… — must end with a slash.
-          server-dir: ${{ vars.FTP_SERVER_DIR || 'billiards.veloura.in/' }}
+          # Folder on the server that holds .htaccess, public/, src/, data/… (the subdomain folder) — must end with a slash.
+          server-dir: ${{ vars.FTP_SERVER_DIR }}
           # Never touch the live database or the server-only config.
           exclude: |
             **/data/*.sqlite*
@@ -109,8 +110,8 @@ jobs:
       - name: Check the live site
         if: steps.cfg.outputs.ready == 'true'
         run: |
-          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://billiards.veloura.in/ || true)
-          echo "https://billiards.veloura.in/ answered HTTP $code"
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://billiards.velouraone.in/ || true)
+          echo "https://billiards.velouraone.in/ answered HTTP $code"
           if [ "$code" != "200" ]; then
             echo "::warning title=Site not reachable yet::Files were uploaded, but the site answered '$code'. Check DNS and the subdomain's document root."
           fi
