@@ -20,3 +20,6 @@ backend/config.local.php
 .idea/
 .DS_Store
 Thumbs.db
+
+# Upload bundle
+veloura-billiards-release.zip
