@@ -55,4 +55,23 @@ release/
 4. Add a DNS record for `billiards` (A record to the server IP, or CNAME to the host) at your domain registrar.
 5. Open the site, sign in as `admin / admin123` and **change both default passwords immediately** in Admin → Staff.
 
+## Continuous deployment (GitHub Actions)
+
+`.github/workflows/ci-cd.yml` runs on every push and pull request:
+
+1. **Build & test:** lints all PHP, runs `build-release.sh`, then `.github/scripts/smoke-test.sh` against the built release (app pages, sign-in, timers and billing, member accounts, month end, staff/admin roles). The ready-to-upload `release/` is attached to the run as an artifact.
+2. **Deploy** (pushes to `main` only): uploads `release/` to cPanel over FTPS. Only changed files are sent, and the live database (`data/*.sqlite`) and `config.local.php` are never touched.
+
+Deployment stays off until you add these in GitHub → **Settings → Secrets and variables → Actions**:
+
+| Kind | Name | Value |
+|---|---|---|
+| Secret | `FTP_SERVER` | cPanel FTP host, e.g. `ftp.veloura.in` |
+| Secret | `FTP_USERNAME` | FTP account (cPanel → FTP Accounts) |
+| Secret | `FTP_PASSWORD` | its password |
+| Variable (optional) | `FTP_SERVER_DIR` | folder holding `public/`, default `billiards.veloura.in/` (must end with `/`) |
+| Variable (optional) | `FTP_PROTOCOL` | `ftps` (default) or `ftp` if your host has no FTPS |
+
+Tip: create an FTP account in cPanel whose home directory is the subdomain folder, then set `FTP_SERVER_DIR` to `./`.
+
 Time zone (used for month boundaries) is set in `backend/config.php` (`Asia/Kolkata` by default).

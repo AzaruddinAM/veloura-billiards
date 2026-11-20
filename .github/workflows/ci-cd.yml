@@ -1,0 +1,116 @@
+name: CI / Deploy
+
+# Every push and pull request: lint PHP, build the Angular app, assemble release/,
+# and run an end-to-end API smoke test against it.
+# Pushes to main then deploy release/ to cPanel over FTPS — once the FTP secrets are set
+# (see README → "Continuous deployment").
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_sqlite, pdo_mysql
+          coverage: none
+
+      - name: Lint PHP
+        run: find backend -name '*.php' -print0 | xargs -0 -n1 php -l
+
+      - name: Build release (Angular production build + PHP API)
+        run: bash build-release.sh
+
+      - name: Smoke test (app, auth, timers, billing, accounts, month end, roles)
+        run: bash .github/scripts/smoke-test.sh release
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@v5
+        with:
+          name: veloura-billiards-release
+          path: release/
+          include-hidden-files: true   # keep the .htaccess files
+          retention-days: 14
+
+  deploy:
+    name: Deploy to billiards.veloura.in
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: https://billiards.veloura.in
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Check deployment secrets
+        id: cfg
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          if [ -n "$FTP_SERVER" ] && [ -n "$FTP_USERNAME" ] && [ -n "$FTP_PASSWORD" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy skipped::Add FTP_SERVER, FTP_USERNAME and FTP_PASSWORD secrets to deploy to cPanel."
+          fi
+
+      - name: Download release bundle
+        if: steps.cfg.outputs.ready == 'true'
+        uses: actions/download-artifact@v5
+        with:
+          name: veloura-billiards-release
+          path: release
+
+      - name: Upload to cPanel over FTPS
+        if: steps.cfg.outputs.ready == 'true'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ${{ vars.FTP_PROTOCOL || 'ftps' }}
+          port: ${{ vars.FTP_PORT || 21 }}
+          local-dir: release/
+          # Folder on the server that holds public/, src/, data/… — must end with a slash.
+          server-dir: ${{ vars.FTP_SERVER_DIR || 'billiards.veloura.in/' }}
+          # Never touch the live database or the server-only config.
+          exclude: |
+            **/data/*.sqlite*
+            **/config.local.php
+
+      - name: Check the live site
+        if: steps.cfg.outputs.ready == 'true'
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://billiards.veloura.in/ || true)
+          echo "https://billiards.veloura.in/ answered HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::warning title=Site not reachable yet::Files were uploaded, but the site answered '$code'. Check DNS and the subdomain's document root."
+          fi
