@@ -17,12 +17,33 @@ CANDIDATES=(
   "$FQDN"
 )
 
+# Accept "ftp://host/", "host:21" etc.
+HOST="${FTP_SERVER#*://}"; HOST="${HOST%%/*}"; HOST="${HOST%%:*}"; HOST="$(echo "$HOST" | tr -d '[:space:]')"
+USER_="$(echo "$FTP_USERNAME" | tr -d '[:space:]')"
+
 ftp_ls() { # list a directory; succeeds only if it exists
-  curl -s --max-time 25 --ftp-ssl --insecure --list-only --user "$FTP_USERNAME:$FTP_PASSWORD" "ftp://$FTP_SERVER/$1" 2>/dev/null \
-  || curl -s --max-time 25 --list-only --user "$FTP_USERNAME:$FTP_PASSWORD" "ftp://$FTP_SERVER/$1" 2>/dev/null
+  curl -s --max-time 25 --ftp-ssl --insecure --list-only --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/$1" 2>/dev/null \
+  || curl -s --max-time 25 --list-only --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/$1" 2>/dev/null
 }
 
-root=$(ftp_ls "") || { echo "::error title=FTP login failed::Could not list the FTP root. Check FTP_SERVER, FTP_USERNAME and FTP_PASSWORD."; exit 1; }
+explain() { # human reason for a curl exit code — never prints credentials
+  case "$1" in
+    6)  echo "FTP_SERVER does not resolve. Use the FTP host from hPanel → Files → FTP Accounts (e.g. ftp.velouraone.in), not the website address." ;;
+    7|28) echo "Nothing answers FTP on that host (connection refused / timed out). FTP_SERVER is probably the website address, which goes through Hostinger's CDN. Use ftp.velouraone.in or the FTP IP from hPanel." ;;
+    67) echo "The server rejected the username or password. In hPanel → FTP Accounts copy the exact FTP username (e.g. u123456789 or u123456789.velouraone.in) and reset the password if unsure." ;;
+    35|64|91) echo "TLS problem with FTPS. Try adding the variable FTP_PROTOCOL = ftp." ;;
+    *)  echo "curl exit code $1." ;;
+  esac
+}
+
+if ! root=$(ftp_ls ""); then
+  code=$(curl -s --max-time 25 -o /dev/null --list-only --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/" 2>/dev/null; echo $?)
+  echo "Login test: host looks like '${HOST%%.*}.…' (${#HOST} chars), username is ${#USER_} chars, curl exit $code"
+  echo "::error title=FTP login failed::$(explain "$code")"
+  exit 1
+fi
+echo "FTP_HOST_CLEAN=$HOST" >> "$GITHUB_ENV"
+echo "FTP_USER_CLEAN=$USER_" >> "$GITHUB_ENV"
 echo "FTP login folder contains: $(echo "$root" | tr '\n' ' ')"
 
 found=()

@@ -92,6 +92,10 @@ jobs:
             echo "::warning title=FTP_PASSWORD is a Variable::Variables are visible to anyone who can read the repo settings. Delete it and add FTP_PASSWORD under the Secrets tab instead."
           fi
           if [ ${#missing[@]} -eq 0 ]; then
+            # Normalise the host ("ftp://host:21/" → "host") and trim stray spaces.
+            host="${FTP_SERVER#*://}"; host="${host%%/*}"; host="${host%%:*}"; host="$(echo "$host" | tr -d '[:space:]')"
+            echo "FTP_HOST_CLEAN=$host" >> "$GITHUB_ENV"
+            echo "FTP_USER_CLEAN=$(echo "$FTP_USERNAME" | tr -d '[:space:]')" >> "$GITHUB_ENV"
             if [ -n "$FTP_SERVER_DIR" ]; then
               dir="${FTP_SERVER_DIR#/}"; [[ "$dir" == */ ]] || dir="$dir/"
               echo "✓ FTP_SERVER_DIR is set"
@@ -129,8 +133,8 @@ jobs:
         if: steps.cfg.outputs.ready == 'true'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_SERVER || vars.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME || vars.FTP_USERNAME }}
+          server: ${{ env.FTP_HOST_CLEAN }}
+          username: ${{ env.FTP_USER_CLEAN }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ${{ vars.FTP_PROTOCOL || 'ftps' }}
           port: ${{ vars.FTP_PORT || 21 }}
