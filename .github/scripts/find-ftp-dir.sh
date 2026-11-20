@@ -1,15 +1,52 @@
 #!/usr/bin/env bash
-# Finds the billiards subdomain folder on Hostinger over FTP when FTP_SERVER_DIR isn't set.
-# Needs FTP_SERVER, FTP_USERNAME, FTP_PASSWORD in the environment. Prints only folder names.
-# Writes DEPLOY_DIR=<path>/ to $GITHUB_ENV when exactly one candidate exists.
+# Finds — and proves — the FTP folder that https://billiards.velouraone.in serves.
+#
+# For each candidate folder it uploads a random probe file over FTP, fetches it over HTTPS,
+# and deletes it again. The first folder whose probe the website serves becomes DEPLOY_DIR.
+# Candidates, in order: FTP_SERVER_DIR (if set), the FTP login folder, then usual Hostinger paths.
+#
+# Env: FTP_SERVER, FTP_USERNAME, FTP_PASSWORD, optional FTP_SERVER_DIR.
+# Prints only folder names and results — never credentials.
 set -uo pipefail
 
 SUB="${SUBDOMAIN:-billiards}"
 DOMAIN="${DOMAIN:-velouraone.in}"
 FQDN="$SUB.$DOMAIN"
 
-# Hostinger layouts, relative to where the FTP account logs in.
-CANDIDATES=(
+# Accept "ftp://host/", "host:21" etc.
+HOST="${FTP_SERVER#*://}"; HOST="${HOST%%/*}"; HOST="${HOST%%:*}"; HOST="$(echo "$HOST" | tr -d '[:space:]')"
+USER_="$(echo "$FTP_USERNAME" | tr -d '[:space:]')"
+
+ftp() { # curl over explicit FTPS, falling back to plain FTP
+  curl -s --max-time 25 --ftp-ssl --insecure --user "$USER_:$FTP_PASSWORD" "$@" 2>/dev/null \
+  || curl -s --max-time 25 --user "$USER_:$FTP_PASSWORD" "$@" 2>/dev/null
+}
+
+explain() { # human reason for a curl exit code — never prints credentials
+  case "$1" in
+    6)  echo "FTP_SERVER does not resolve. Use the FTP host from hPanel → Files → FTP Accounts (e.g. ftp.velouraone.in), not the website address." ;;
+    7|28) echo "Nothing answers FTP on that host. FTP_SERVER is probably the website address (behind Hostinger's CDN). Use ftp.velouraone.in or the FTP IP from hPanel." ;;
+    67) echo "The server rejected the username or password. Copy the exact FTP username from hPanel → FTP Accounts and reset the password if unsure." ;;
+    35|64|91) echo "TLS problem with FTPS. Try adding the variable FTP_PROTOCOL = ftp." ;;
+    *)  echo "curl exit code $1." ;;
+  esac
+}
+
+# 1) Log in
+if ! root=$(ftp --list-only "ftp://$HOST/"); then
+  code=$(curl -s --max-time 25 -o /dev/null --list-only --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/" 2>/dev/null; echo $?)
+  echo "::error title=FTP login failed::$(explain "$code")"
+  exit 1
+fi
+listing="$(echo "$root" | grep -vxE '\.{1,2}' | tr '\n' ' ')"
+echo "FTP login folder contains: ${listing:-(empty)}"
+
+# 2) Candidates
+norm() { local d="${1#./}"; d="${d#/}"; d="${d%/}"; [ "$d" = "." ] && d=""; echo "$d"; }
+CANDIDATES=()
+[ -n "${FTP_SERVER_DIR:-}" ] && CANDIDATES+=("$(norm "$FTP_SERVER_DIR")")
+CANDIDATES+=(
+  ""                                   # the FTP login folder itself
   "domains/$DOMAIN/public_html/$SUB"
   "domains/$FQDN/public_html"
   "public_html/$SUB"
@@ -17,71 +54,34 @@ CANDIDATES=(
   "$FQDN"
 )
 
-# Accept "ftp://host/", "host:21" etc.
-HOST="${FTP_SERVER#*://}"; HOST="${HOST%%/*}"; HOST="${HOST%%:*}"; HOST="$(echo "$HOST" | tr -d '[:space:]')"
-USER_="$(echo "$FTP_USERNAME" | tr -d '[:space:]')"
-
-ftp_ls() { # list a directory; succeeds only if it exists
-  curl -s --max-time 25 --ftp-ssl --insecure --list-only --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/$1" 2>/dev/null \
-  || curl -s --max-time 25 --list-only --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/$1" 2>/dev/null
-}
-
-explain() { # human reason for a curl exit code — never prints credentials
-  case "$1" in
-    6)  echo "FTP_SERVER does not resolve. Use the FTP host from hPanel → Files → FTP Accounts (e.g. ftp.velouraone.in), not the website address." ;;
-    7|28) echo "Nothing answers FTP on that host (connection refused / timed out). FTP_SERVER is probably the website address, which goes through Hostinger's CDN. Use ftp.velouraone.in or the FTP IP from hPanel." ;;
-    67) echo "The server rejected the username or password. In hPanel → FTP Accounts copy the exact FTP username (e.g. u123456789 or u123456789.velouraone.in) and reset the password if unsure." ;;
-    35|64|91) echo "TLS problem with FTPS. Try adding the variable FTP_PROTOCOL = ftp." ;;
-    *)  echo "curl exit code $1." ;;
-  esac
-}
-
-if ! root=$(ftp_ls ""); then
-  code=$(curl -s --max-time 25 -o /dev/null --list-only --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/" 2>/dev/null; echo $?)
-  echo "Login test: host looks like '${HOST%%.*}.…' (${#HOST} chars), username is ${#USER_} chars, curl exit $code"
-  echo "::error title=FTP login failed::$(explain "$code")"
-  exit 1
-fi
-echo "FTP_HOST_CLEAN=$HOST" >> "$GITHUB_ENV"
-echo "FTP_USER_CLEAN=$USER_" >> "$GITHUB_ENV"
-echo "FTP login folder contains: $(echo "$root" | tr '\n' ' ')"
-
-# Is the FTP login folder itself the website's document root? (e.g. an FTP account created
-# for the subdomain folder.) Prove it: upload a random probe file and fetch it over HTTPS.
-probe="vb-probe-$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n').txt"
-echo "veloura-deploy-probe" > "/tmp/$probe"
-if curl -s --max-time 25 --ftp-ssl --insecure -T "/tmp/$probe" --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/$probe" 2>/dev/null \
-   || curl -s --max-time 25 -T "/tmp/$probe" --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/$probe" 2>/dev/null; then
-  body=$(curl -s --max-time 20 "https://$FQDN/$probe" || true)
-  # always clean up the probe
-  curl -s --max-time 25 --ftp-ssl --insecure --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/" -Q "DELE $probe" -o /dev/null 2>/dev/null \
-    || curl -s --max-time 25 --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/" -Q "DELE $probe" -o /dev/null 2>/dev/null || true
-  if [ "$body" = "veloura-deploy-probe" ]; then
-    echo "✓ the FTP login folder is $FQDN's document root"
-    echo "DEPLOY_DIR=./" >> "$GITHUB_ENV"
-    echo "::notice title=Using FTP folder ./::The FTP account opens directly in $FQDN's folder (verified with a probe file). To pin it, add a repository variable FTP_SERVER_DIR = ./"
+# 3) Probe each candidate until the website serves the probe
+token="$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+probe="vb-probe-$token.txt"
+echo "veloura-deploy-probe-$token" > "/tmp/$probe"
+tried=()
+for c in "${CANDIDATES[@]}"; do
+  label="${c:-./}"
+  case " ${tried[*]-} " in *" $label "*) continue ;; esac
+  tried+=("$label")
+  path="${c:+$c/}$probe"
+  if ! ftp -T "/tmp/$probe" "ftp://$HOST/$path" >/dev/null; then
+    echo "· $label — folder doesn't exist or isn't writable"
+    continue
+  fi
+  body="$(curl -s --max-time 20 "https://$FQDN/$probe?nocache=$token" || true)"
+  ftp "ftp://$HOST/" -Q "DELE $path" -o /dev/null >/dev/null || true
+  if [ "$body" = "veloura-deploy-probe-$token" ]; then
+    echo "✓ $label — https://$FQDN/ serves this folder"
+    if [ -n "$c" ]; then echo "DEPLOY_DIR=$c/" >> "$GITHUB_ENV"; else echo "DEPLOY_DIR=./" >> "$GITHUB_ENV"; fi
+    if [ -n "${FTP_SERVER_DIR:-}" ] && [ "$(norm "$FTP_SERVER_DIR")" != "$c" ]; then
+      echo "::warning title=FTP_SERVER_DIR is wrong::The saved FTP_SERVER_DIR is not the website's folder. Deployed to '$label' instead — update the FTP_SERVER_DIR variable to: $label"
+    else
+      echo "::notice title=Deploying to $label::Verified: https://$FQDN/ serves FTP folder '$label'."
+    fi
     exit 0
   fi
-  echo "· the FTP login folder is not $FQDN's document root"
-else
-  echo "· could not upload a probe file to the FTP login folder"
-fi
-
-found=()
-for c in "${CANDIDATES[@]}"; do
-  if ftp_ls "$c/" >/dev/null; then echo "✓ found $c/"; found+=("$c"); else echo "· no $c/"; fi
+  echo "· $label — exists, but the website doesn't serve it"
 done
 
-if [ ${#found[@]} -eq 1 ]; then
-  echo "DEPLOY_DIR=${found[0]}/" >> "$GITHUB_ENV"
-  echo "::notice title=Using FTP folder ${found[0]}/::Found the subdomain folder automatically. To pin it, add a repository variable FTP_SERVER_DIR = ${found[0]}/"
-  exit 0
-fi
-
-listing=$(echo "$root" | tr '\n' ' ')
-if [ ${#found[@]} -eq 0 ]; then
-  echo "::error title=Subdomain folder not found::FTP login folder contains: $listing — none of: ${CANDIDATES[*]}. Set FTP_SERVER_DIR to the folder shown in hPanel File Manager for $FQDN."
-else
-  echo "::error title=Several possible folders::Found: ${found[*]}. Set FTP_SERVER_DIR to the one that is $FQDN's document root."
-fi
+echo "::error title=Website folder not found::None of these FTP folders is served by https://$FQDN/: ${tried[*]}. FTP login folder contains: ${listing:-(empty)}. In hPanel → File Manager, find the folder for $FQDN and set FTP_SERVER_DIR to its path as seen by this FTP account."
 exit 1

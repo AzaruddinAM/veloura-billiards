@@ -96,13 +96,7 @@ jobs:
             host="${FTP_SERVER#*://}"; host="${host%%/*}"; host="${host%%:*}"; host="$(echo "$host" | tr -d '[:space:]')"
             echo "FTP_HOST_CLEAN=$host" >> "$GITHUB_ENV"
             echo "FTP_USER_CLEAN=$(echo "$FTP_USERNAME" | tr -d '[:space:]')" >> "$GITHUB_ENV"
-            if [ -n "$FTP_SERVER_DIR" ]; then
-              dir="${FTP_SERVER_DIR#/}"; [[ "$dir" == */ ]] || dir="$dir/"
-              echo "✓ FTP_SERVER_DIR is set"
-              echo "DEPLOY_DIR=$dir" >> "$GITHUB_ENV"
-            else
-              echo "· FTP_SERVER_DIR not set — the next step will look for the subdomain folder"
-            fi
+            if [ -n "$FTP_SERVER_DIR" ]; then echo "✓ FTP_SERVER_DIR is set (will be verified)"; else echo "· FTP_SERVER_DIR not set (will be detected)"; fi
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
@@ -110,16 +104,18 @@ jobs:
           fi
 
       - uses: actions/checkout@v5
-        if: steps.cfg.outputs.ready == 'true' && env.DEPLOY_DIR == ''
+        if: steps.cfg.outputs.ready == 'true'
         with:
           sparse-checkout: .github/scripts
 
-      - name: Find the subdomain folder on the server
-        if: steps.cfg.outputs.ready == 'true' && env.DEPLOY_DIR == ''
+      # Proves which FTP folder the website serves (probe file) before uploading anything.
+      - name: Verify the website folder on the server
+        if: steps.cfg.outputs.ready == 'true'
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER || vars.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME || vars.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR || vars.FTP_SERVER_DIR }}
         run: bash .github/scripts/find-ftp-dir.sh
 
       - name: Download release bundle

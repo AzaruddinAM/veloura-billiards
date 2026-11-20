@@ -13,6 +13,9 @@ RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 # Never serve config, source, schema or the database directly
 RewriteRule ^(config[^/]*\.php|src/|database/|data/) - [F,L]
 
+# Deploy probe files (uploaded and deleted by GitHub Actions) are served as-is
+RewriteRule ^vb-probe-[a-f0-9]+\.txt$ - [L]
+
 # Everything else is served from public/
 RewriteCond %{REQUEST_URI} !^/public/
 RewriteRule ^(.*)$ public/$1 [L]
