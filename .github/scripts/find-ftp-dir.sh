@@ -42,9 +42,15 @@ listing="$(echo "$root" | grep -vxE '\.{1,2}' | tr '\n' ' ')"
 echo "FTP login folder contains: ${listing:-(empty)}"
 
 # 2) Candidates
-norm() { local d="${1#./}"; d="${d#/}"; d="${d%/}"; [ "$d" = "." ] && d=""; echo "$d"; }
+#   norm keeps a leading "/" (absolute path on the FTP server) but drops "./", trailing "/".
+norm() { local d="$1"; d="${d#./}"; [ "$d" != "/" ] && d="${d%/}"; [ "$d" = "." ] && d=""; echo "$d"; }
 CANDIDATES=()
-[ -n "${FTP_SERVER_DIR:-}" ] && CANDIDATES+=("$(norm "$FTP_SERVER_DIR")")
+if [ -n "${FTP_SERVER_DIR:-}" ]; then
+  saved="$(norm "$FTP_SERVER_DIR")"
+  CANDIDATES+=("$saved")
+  # also try it relative to the login folder, e.g. "/public_html/x" → "public_html/x"
+  [ "${saved#/}" != "$saved" ] && CANDIDATES+=("${saved#/}")
+fi
 CANDIDATES+=(
   ""                                   # the FTP login folder itself
   "domains/$DOMAIN/public_html/$SUB"
@@ -58,19 +64,35 @@ CANDIDATES+=(
 token="$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 probe="vb-probe-$token.txt"
 echo "veloura-deploy-probe-$token" > "/tmp/$probe"
-tried=()
+UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
+fetch_probe() { # retries: the CDN in front of the site can be slow to see a brand-new file
+  local i out
+  for i in 1 2 3 4 5; do
+    out="$(curl -s --max-time 20 -A "$UA" -H 'Cache-Control: no-cache' -w $'\n%{http_code}' "https://$FQDN/$probe?nocache=$token-$i" || true)"
+    PROBE_STATUS="${out##*$'\n'}"; PROBE_BODY="$(printf '%s' "${out%$'\n'*}" | tr -d '\r\n')"
+    [ "$PROBE_BODY" = "veloura-deploy-probe-$token" ] && return 0
+    sleep 3
+  done
+  return 1
+}
+
+tried=(); writable=(); statuses=()
 for c in "${CANDIDATES[@]}"; do
   label="${c:-./}"
   case " ${tried[*]-} " in *" $label "*) continue ;; esac
   tried+=("$label")
-  path="${c:+$c/}$probe"
-  if ! ftp -T "/tmp/$probe" "ftp://$HOST/$path" >/dev/null; then
+  if [ "${c#/}" != "$c" ]; then url="ftp://$HOST/%2F${c#/}/$probe"; dele="${c}/$probe"   # absolute path
+  else url="ftp://$HOST/${c:+$c/}$probe"; dele="${c:+$c/}$probe"; fi
+  if ! ftp -T "/tmp/$probe" "$url" >/dev/null; then
     echo "· $label — folder doesn't exist or isn't writable"
     continue
   fi
-  body="$(curl -s --max-time 20 "https://$FQDN/$probe?nocache=$token" || true)"
-  ftp "ftp://$HOST/" -Q "DELE $path" -o /dev/null >/dev/null || true
-  if [ "$body" = "veloura-deploy-probe-$token" ]; then
+  writable+=("$label")
+  PROBE_STATUS="" PROBE_BODY=""
+  fetch_probe; ok=$?
+  ftp "ftp://$HOST/" -Q "DELE $dele" -o /dev/null >/dev/null || true
+  statuses+=("$label=HTTP ${PROBE_STATUS:-?}")
+  if [ $ok -eq 0 ]; then
     echo "✓ $label — https://$FQDN/ serves this folder"
     if [ -n "$c" ]; then echo "DEPLOY_DIR=$c/" >> "$GITHUB_ENV"; else echo "DEPLOY_DIR=./" >> "$GITHUB_ENV"; fi
     if [ -n "${FTP_SERVER_DIR:-}" ] && [ "$(norm "$FTP_SERVER_DIR")" != "$c" ]; then
@@ -80,8 +102,21 @@ for c in "${CANDIDATES[@]}"; do
     fi
     exit 0
   fi
-  echo "· $label — exists, but the website doesn't serve it"
+  echo "· $label — writable, but the website answered HTTP ${PROBE_STATUS:-?} for the probe"
 done
 
-echo "::error title=Website folder not found::None of these FTP folders is served by https://$FQDN/: ${tried[*]}. FTP login folder contains: ${listing:-(empty)}. In hPanel → File Manager, find the folder for $FQDN and set FTP_SERVER_DIR to its path as seen by this FTP account."
+# Couldn't prove it over HTTPS (e.g. the CDN blocks GitHub's servers). If the saved
+# FTP_SERVER_DIR exists and is writable, trust the explicit setting.
+# Only the exact saved value is trusted — never its relative variant, which could be a
+# nested folder created by mistake.
+if [ -n "${FTP_SERVER_DIR:-}" ]; then
+  label="${saved:-./}"
+  case " ${writable[*]-} " in *" $label "*)
+    if [ -n "$saved" ]; then echo "DEPLOY_DIR=$saved/" >> "$GITHUB_ENV"; else echo "DEPLOY_DIR=./" >> "$GITHUB_ENV"; fi
+    echo "::warning title=Folder not verified::Couldn't confirm over HTTPS which folder the site serves (${statuses[*]-no responses}). Deploying to the saved FTP_SERVER_DIR '$label' as configured."
+    exit 0 ;;
+  esac
+fi
+
+echo "::error title=Website folder not found::No FTP folder could be confirmed as https://$FQDN/. Writable: ${writable[*]:-none}. Website answers: ${statuses[*]:-none}. FTP login folder contains: ${listing:-(empty)}. If the FTP account opens directly in the site folder, set the variable FTP_SERVER_DIR = ./"
 exit 1
