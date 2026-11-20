@@ -1,0 +1,103 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Member accounts</div>
+      <h1>Accounts</h1>
+      <p>Regulars can play on account and settle up later. Balances roll into the month-end report.</p>
+    </div>
+    <button class="btn btn-gold" (click)="newMember()">+ New member</button>
+  </div>
+
+  <div class="grid grid-4" style="margin-bottom: 18px">
+    <div class="card stat" style="--ball:#2f6fd6"><div class="label">Members</div><div class="value">{{ members().length }}</div></div>
+    <div class="card stat" style="--ball:#d8432f"><div class="label">With dues</div><div class="value">{{ withDues() }}</div></div>
+    <div class="card stat" style="--ball:#f2c230"><div class="label">Total outstanding</div><div class="value">{{ totalDue() | money }}</div></div>
+  </div>
+
+  <div class="split">
+    <div class="card list">
+      <input placeholder="Search name or phone…" [ngModel]="search()" (ngModelChange)="search.set($event)" aria-label="Search members" />
+      <div class="members">
+        @for (m of filtered(); track m.id) {
+          <button class="member" [class.on]="selected() === m.id" [class.inactive]="!m.active" (click)="open(m.id, true)">
+            <span class="avatar">{{ m.name.charAt(0).toUpperCase() }}</span>
+            <span class="who"><strong>{{ m.name }}</strong><small class="muted">{{ m.phone || 'No phone' }}</small></span>
+            <span class="bal mono" [class.danger]="m.balance > 0" [class.ok]="m.balance < 0">{{ m.balance | money }}</span>
+          </button>
+        } @empty {
+          <div class="empty"><div class="ball"></div>No members yet.</div>
+        }
+      </div>
+    </div>
+
+    <div class="card detail">
+      @if (ledger(); as l) {
+        <div class="card-title">
+          <div>
+            <div class="eyebrow">Ledger</div>
+            <h2>{{ l.member.name }}</h2>
+            <span class="muted">{{ l.member.phone }}</span>
+          </div>
+          <div class="balance-box">
+            <span class="k">Balance due</span>
+            <span class="v mono" [class.danger]="l.balance > 0">{{ l.balance | money: 2 }}</span>
+            @if (selectedMember(); as m) { <button class="btn btn-sm btn-ghost" (click)="edit(m)">Edit member</button> }
+          </div>
+        </div>
+
+        <form class="pay" (ngSubmit)="recordPayment()">
+          <label class="field">Amount<input type="number" min="1" step="0.01" name="a" [(ngModel)]="payAmount" required /></label>
+          <label class="field">Method
+            <select name="m" [(ngModel)]="payMethod"><option value="cash">Cash</option><option value="upi">UPI</option><option value="card">Card</option></select>
+          </label>
+          <label class="field">Note<input name="n" [(ngModel)]="payNote" placeholder="Optional" /></label>
+          <div class="row">
+            @if (l.balance > 0) { <button type="button" class="btn btn-ghost btn-sm" (click)="settleFull()">Full</button> }
+            <button class="btn btn-felt" type="submit" [disabled]="!payAmount">Record payment</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table class="data stack">
+            <thead><tr><th>Date</th><th>Details</th><th class="num">Charge</th><th class="num">Paid</th><th class="num">Balance</th></tr></thead>
+            <tbody>
+              @for (e of l.entries; track e.type + e.ref) {
+                <tr>
+                  <td class="mono" data-label="Date">{{ e.ts | ts }}</td>
+                  <td class="lead">{{ e.description }}</td>
+                  <td class="num" [class.hide-sm]="e.type !== 'charge'" data-label="Charge">{{ e.type === 'charge' ? (e.amount | money: 2) : '' }}</td>
+                  <td class="num ok" [class.hide-sm]="e.type !== 'payment'" data-label="Paid">{{ e.type === 'payment' ? (e.amount | money: 2) : '' }}</td>
+                  <td class="num" data-label="Balance">{{ e.balance | money: 2 }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="5" class="empty">No account activity yet.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <div class="empty"><div class="ball"></div>Select a member to see their ledger.</div>
+      }
+    </div>
+  </div>
+</div>
+
+@if (editing(); as m) {
+  <div class="backdrop" (click)="editing.set(null)">
+    <form class="modal card" (click)="$event.stopPropagation()" (ngSubmit)="saveMember()">
+      <div class="eyebrow">{{ m.id ? 'Edit' : 'New' }} member</div>
+      <h2>{{ m.id ? m.name : 'Add a regular' }}</h2>
+      <div class="form-grid" style="margin-top: 16px">
+        <label class="field">Name<input name="name" [(ngModel)]="m.name" required /></label>
+        <label class="field">Phone<input name="phone" [(ngModel)]="m.phone" /></label>
+        <label class="field">Email<input name="email" type="email" [(ngModel)]="m.email" /></label>
+      </div>
+      <label class="field" style="margin-top: 14px">Notes<textarea name="notes" rows="2" [(ngModel)]="m.notes"></textarea></label>
+      @if (m.id) { <label class="checkbox" style="margin-top: 12px"><input type="checkbox" name="active" [(ngModel)]="m.active" /> Active</label> }
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" (click)="editing.set(null)">Cancel</button>
+        <button class="btn btn-gold" type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+}

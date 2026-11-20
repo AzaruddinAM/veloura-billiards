@@ -1,0 +1,36 @@
+.status {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 18px; align-items: center; margin-bottom: 16px;
+  &.closed { border-color: rgba(63, 209, 139, .4); }
+}
+.status-text { display: grid; strong { font-size: 1.05rem; } }
+.seal {
+  width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center;
+  font-weight: 800; color: #111; font-size: 1rem;
+  background: radial-gradient(circle at 50% 50%, var(--ivory) 0 34%, transparent 35%), radial-gradient(circle at 32% 28%, #555 0 8%, #111 60%);
+  box-shadow: 0 6px 14px -4px #000;
+}
+.closed .seal { background: radial-gradient(circle at 50% 50%, var(--ivory) 0 34%, transparent 35%), radial-gradient(circle at 32% 28%, #6fe0a9 0 8%, #17a463 60%, #0a4f30); }
+.kpis { margin-bottom: 16px; }
+.methods { display: grid; gap: 14px; }
+.method { display: grid; grid-template-columns: 90px 1fr 100px; gap: 12px; align-items: center; font-size: .9rem; .mono { text-align: right; } }
+.mk { font-weight: 700; font-size: .78rem; letter-spacing: .08em; color: var(--muted); }
+.bar { height: 12px; border-radius: 99px; background: rgba(255,255,255,.05); overflow: hidden; i { display: block; height: 100%; border-radius: 99px; min-width: 2px; transition: width .6s ease; } }
+.m-cash { background: linear-gradient(90deg, #0f6a44, #2fd58a); }
+.m-upi { background: linear-gradient(90deg, #6a2fb8, #b48cff); }
+.m-card { background: linear-gradient(90deg, #1d4f9a, #6ea8ff); }
+.m-account { background: linear-gradient(90deg, #9a6f22, #f3d58f); }
+.cats { display: flex; flex-wrap: wrap; gap: 6px; }
+.exp-form { display: grid; grid-template-columns: 1fr 1fr 1fr 1.4fr auto; gap: 12px; align-items: end; padding: 16px; margin-bottom: 14px; border-radius: 14px; background: rgba(0,0,0,.25); border: 1px dashed var(--line); }
+tr.link { cursor: pointer; }
+@media (max-width: 900px) {
+  .status { grid-template-columns: auto 1fr; .row { grid-column: 1 / -1; } }
+  .exp-form { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .page-head .row { width: 100%; flex-wrap: nowrap; input { flex: 1; min-width: 0; } }
+  .status { gap: 12px; padding: 14px; .row { display: grid; grid-template-columns: 1fr 1fr; } .btn-gold, .row > .btn:last-child:nth-child(3) { grid-column: 1 / -1; } }
+  .seal { width: 40px; height: 40px; }
+  .method { grid-template-columns: 72px 1fr auto; gap: 10px; }
+  .exp-form { padding: 12px; gap: 10px; .field:nth-of-type(4), .btn { grid-column: 1 / -1; } }
+  .cats { width: 100%; }
+}

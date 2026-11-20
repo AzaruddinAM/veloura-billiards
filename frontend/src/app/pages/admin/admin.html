@@ -1,0 +1,179 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Admin panel</div>
+      <h1>The back office</h1>
+      <p>Performance, tables, PS5 bays and simulators, staff logins and billing rules.</p>
+    </div>
+    <div class="seg" role="tablist">
+      @for (t of ['overview', 'tables', 'staff', 'settings']; track t) {
+        <button role="tab" [attr.aria-selected]="tab() === t" [class.on]="tab() === t" (click)="tab.set($any(t))">{{ t.charAt(0).toUpperCase() + t.slice(1) }}</button>
+      }
+    </div>
+  </div>
+
+  <!-- ============ Overview ============ -->
+  @if (tab() === 'overview') {
+    @if (overview(); as o) {
+      <div class="grid grid-4" style="margin-bottom: 16px">
+        <div class="card stat" style="--ball:#1c8a4c"><div class="label">Revenue · {{ o.month.period | period }}</div><div class="value">{{ o.month.revenue | money }}</div><div class="sub">{{ o.month.sessions_count }} sessions · {{ o.month.minutes | mins }}</div></div>
+        <div class="card stat" style="--ball:#f2c230"><div class="label">Net this month</div><div class="value" [class.danger]="o.month.net < 0">{{ o.month.net | money }}</div><div class="sub">after {{ o.month.expenses_total | money }} expenses</div></div>
+        <div class="card stat" style="--ball:#d8432f"><div class="label">Member dues</div><div class="value">{{ o.outstanding_total | money }}</div><div class="sub">{{ o.members }} active members</div></div>
+        <div class="card stat" style="--ball:#2f6fd6"><div class="label">Tables running</div><div class="value">{{ o.running }}</div><div class="sub"><a routerLink="/">Open the floor →</a></div></div>
+      </div>
+
+      @if (o.open_months.length) {
+        <div class="alert" style="margin-bottom: 16px">
+          Months waiting to be closed:
+          @for (p of o.open_months; track p) { <a routerLink="/month-end" class="gold"><strong>{{ p | period }}</strong></a>{{ $last ? '' : ', ' }} }
+          — go to <a routerLink="/month-end">Month End</a> to review and close them.
+        </div>
+      }
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-title"><h3>Last 6 months</h3></div>
+          <vb-bar-chart [series]="trendSeries()" [labels]="trendLabels()" [format]="fmt" label="Revenue and expenses, last six months" />
+        </div>
+        <div class="card">
+          <div class="card-title"><h3>Top tables this month</h3></div>
+          <div class="table-wrap">
+            <table class="data">
+              <thead><tr><th>Table</th><th class="num">Sessions</th><th class="num">Time</th><th class="num">Revenue</th></tr></thead>
+              <tbody>
+                @for (t of o.month.by_table; track t.table_id) {
+                  <tr><td>{{ t.name }}</td><td class="num">{{ t.sessions }}</td><td class="num">{{ t.minutes | mins }}</td><td class="num gold">{{ t.revenue | money }}</td></tr>
+                } @empty { <tr><td colspan="4" class="empty">No billed sessions yet this month.</td></tr> }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    }
+  }
+
+  <!-- ============ Tables ============ -->
+  @if (tab() === 'tables') {
+    <div class="card">
+      <div class="card-title"><h3>Tables, consoles &amp; hourly rates</h3><button class="btn btn-gold btn-sm" (click)="newTable()">+ Add table / station</button></div>
+      <div class="table-wrap">
+        <table class="data stack">
+          <thead><tr><th>Order</th><th>Name</th><th>Type</th><th class="num">Rate / hour</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            @for (t of tables(); track t.id) {
+              <tr>
+                <td class="mono muted hide-sm">{{ t.sort_order }}</td>
+                <td class="lead"><strong>{{ t.name }}</strong></td>
+                <td data-label="Type"><span class="chip" [class.blue]="t.type === 'carom' || t.type === 'ps5'" [class.red]="t.type === 'simulator'" [class.green]="t.type === 'pool' || t.type === 'snooker'">{{ typeLabels[t.type] }}</span></td>
+                <td class="num gold" data-label="Rate / hour">{{ t.rate_per_hour | money }}</td>
+                <td data-label="Status"><span class="chip" [class.green]="t.active">{{ t.active ? 'Active' : 'Archived' }}</span></td>
+                <td class="actions act">
+                  <button class="btn btn-sm btn-ghost" (click)="editTable.set({ ...t })">Edit</button>
+                  @if (t.active) { <button class="btn btn-sm btn-ghost" (click)="removeTable(t)">Remove</button> }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="muted small">Rate changes apply to sessions started after the change; running timers keep the rate they started with.</p>
+    </div>
+  }
+
+  <!-- ============ Staff ============ -->
+  @if (tab() === 'staff') {
+    <div class="card">
+      <div class="card-title"><h3>Staff logins</h3><button class="btn btn-gold btn-sm" (click)="newUser()">+ Add staff</button></div>
+      <div class="table-wrap">
+        <table class="data stack">
+          <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            @for (u of users(); track u.id) {
+              <tr>
+                <td class="lead"><strong>{{ u.name }}</strong></td>
+                <td class="mono" data-label="Username">{{ u.username }}</td>
+                <td data-label="Role"><span class="chip" [class.gold]="u.role === 'admin'">{{ u.role }}</span></td>
+                <td data-label="Status"><span class="chip" [class.green]="u.active" [class.red]="!u.active">{{ u.active ? 'Active' : 'Disabled' }}</span></td>
+                <td class="actions act"><button class="btn btn-sm btn-ghost" (click)="editUser.set({ ...u, password: '' })">Edit</button></td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="muted small"><strong>Admin</strong> can see Month End and this panel. <strong>Staff</strong> can run tables, view sessions and manage member accounts.</p>
+    </div>
+  }
+
+  <!-- ============ Settings ============ -->
+  @if (tab() === 'settings') {
+    <form class="card settings" (ngSubmit)="saveSettings()">
+      <div class="card-title"><h3>Business &amp; billing</h3></div>
+      <div class="form-grid">
+        <label class="field">Business name<input name="bn" [(ngModel)]="settings.business_name" /></label>
+        <label class="field">Currency symbol<input name="cur" [(ngModel)]="settings.currency" maxlength="4" /></label>
+        <label class="field">Phone<input name="ph" [(ngModel)]="settings.phone" /></label>
+        <label class="field">Address<input name="ad" [(ngModel)]="settings.address" /></label>
+      </div>
+      <div class="card-title" style="margin-top: 22px"><h3>Timer billing rules</h3></div>
+      <div class="form-grid">
+        <label class="field">Round up to (minutes)
+          <select name="rt" [(ngModel)]="settings.round_to_minutes">
+            @for (n of [1, 5, 10, 15, 30, 60]; track n) { <option [ngValue]="n">{{ n === 1 ? 'Exact minute' : n + ' minutes' }}</option> }
+          </select>
+        </label>
+        <label class="field">Minimum charge (minutes)<input name="mm" type="number" min="0" [(ngModel)]="settings.min_minutes" /></label>
+      </div>
+      <p class="muted small">
+        Example: rate {{ 200 | money }}/hr, played 37 min →
+        billed {{ exampleBilled() }} min.
+      </p>
+      <div class="modal-actions"><button class="btn btn-gold" type="submit">Save settings</button></div>
+    </form>
+  }
+</div>
+
+<!-- Table modal -->
+@if (editTable(); as t) {
+  <div class="backdrop" (click)="editTable.set(null)">
+    <form class="modal card" (click)="$event.stopPropagation()" (ngSubmit)="saveTable()">
+      <div class="eyebrow">{{ t.id ? 'Edit' : 'New' }} table</div>
+      <h2>{{ t.id ? t.name : 'Add a table' }}</h2>
+      <div class="form-grid" style="margin-top: 16px">
+        <label class="field">Name<input name="n" [(ngModel)]="t.name" required /></label>
+        <label class="field">Type
+          <select name="ty" [(ngModel)]="t.type"><option value="pool">Pool</option><option value="snooker">Snooker</option><option value="carom">Carom</option><option value="ps5">PS5 bay</option><option value="simulator">Racing simulator</option></select>
+        </label>
+        <label class="field">Rate per hour<input name="r" type="number" min="0" [(ngModel)]="t.rate_per_hour" required /></label>
+        <label class="field">Display order<input name="o" type="number" [(ngModel)]="t.sort_order" /></label>
+      </div>
+      @if (t.id) { <label class="checkbox" style="margin-top: 12px"><input type="checkbox" name="a" [(ngModel)]="t.active" /> Active on the floor</label> }
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" (click)="editTable.set(null)">Cancel</button>
+        <button class="btn btn-gold" type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+}
+
+<!-- Staff modal -->
+@if (editUser(); as u) {
+  <div class="backdrop" (click)="editUser.set(null)">
+    <form class="modal card" (click)="$event.stopPropagation()" (ngSubmit)="saveUser()">
+      <div class="eyebrow">{{ u.id ? 'Edit' : 'New' }} staff login</div>
+      <h2>{{ u.id ? u.name : 'Add staff' }}</h2>
+      <div class="form-grid" style="margin-top: 16px">
+        <label class="field">Name<input name="n" [(ngModel)]="u.name" required /></label>
+        <label class="field">Username<input name="u" [(ngModel)]="u.username" [disabled]="!!u.id" required autocomplete="off" /></label>
+        <label class="field">{{ u.id ? 'New password (optional)' : 'Password' }}<input name="p" type="password" [(ngModel)]="u.password" autocomplete="new-password" /></label>
+        <label class="field">Role
+          <select name="r" [(ngModel)]="u.role"><option value="staff">Staff</option><option value="admin">Admin</option></select>
+        </label>
+      </div>
+      @if (u.id) { <label class="checkbox" style="margin-top: 12px"><input type="checkbox" name="a" [(ngModel)]="u.active" /> Can sign in</label> }
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" (click)="editUser.set(null)">Cancel</button>
+        <button class="btn btn-gold" type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+}

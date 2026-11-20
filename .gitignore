@@ -1,0 +1,22 @@
+# Dependencies & build output
+node_modules/
+frontend/dist/
+frontend/.angular/
+release/
+
+# Runtime data — never commit the live database
+backend/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Local overrides / secrets
+backend/config.local.php
+.env
+*.log
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

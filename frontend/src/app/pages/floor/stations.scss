@@ -1,0 +1,148 @@
+// ================= Gaming stations (PS5 bay, racing simulator) =================
+.station {
+  position: relative; width: 300px; height: 228px; margin-top: 4px;
+  transform-style: preserve-3d;
+  transition: transform .6s cubic-bezier(.2, .8, .2, 1);
+  filter: brightness(.72) saturate(.75);
+}
+.front .station, .running .station { filter: none; }
+.slot:hover .station, .front .station { transform: translateY(-4px) rotateX(4deg); }
+
+.glow {
+  position: absolute; left: -10px; right: -10px; bottom: -18px; height: 80px;
+  background: radial-gradient(closest-side, var(--glow, rgba(60, 123, 224, .45)), transparent);
+  filter: blur(4px); opacity: .45; transition: opacity .5s;
+}
+.running .glow { opacity: 1; animation: pulse 2.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .6; } }
+
+.hud { position: absolute; top: 5px; left: 7px; z-index: 3; font-size: .58rem; color: #fff; text-shadow: 0 1px 3px #000; letter-spacing: .05em; }
+.idle-txt {
+  position: absolute; inset: 0; display: grid; place-items: center; z-index: 3;
+  font: 800 .62rem var(--sans); letter-spacing: .3em; color: rgba(255, 255, 255, .55);
+  animation: blink 1.6s steps(2) infinite;
+}
+@keyframes blink { 50% { opacity: .25; } }
+
+// ---------- PS5 bay ----------
+.ps5 {
+  .tv {
+    position: absolute; left: 34px; top: 0; width: 206px; height: 118px;
+    padding: 5px; border-radius: 7px; background: #070708;
+    box-shadow: 0 0 0 1px #2a2a2e, 0 18px 30px -12px #000;
+    transform: translateZ(-26px);
+  }
+  .screen {
+    position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 3px;
+    background: radial-gradient(ellipse at 50% 60%, #14204a, #05070f 75%);
+  }
+  .scene-sky { position: absolute; inset: 0; background: linear-gradient(#1b2a6b, #6b3fa0 55%, #ff7b54); }
+  .scene-hills {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 46%;
+    background:
+      radial-gradient(60px 40px at 20% 100%, #1d1240 98%, transparent) 0 0 / 120px 100% repeat-x,
+      radial-gradient(90px 50px at 70% 100%, #2c1a5c 98%, transparent) 0 0 / 160px 100% repeat-x,
+      linear-gradient(transparent 70%, #12082a 70%);
+    animation: scroll 3s linear infinite;
+  }
+  .scene-runner {
+    position: absolute; left: 38%; bottom: 30%; width: 9px; height: 13px; border-radius: 3px;
+    background: #f3d58f; box-shadow: 0 0 10px #f3d58f;
+    animation: hop .7s ease-in-out infinite alternate;
+  }
+  .tv-stand {
+    position: absolute; left: 22px; top: 126px; width: 232px; height: 12px; border-radius: 3px;
+    background: linear-gradient(#6b2a14, #2b0e06);
+    box-shadow: 0 8px 14px -4px #000;
+  }
+  .console {
+    position: absolute; right: 16px; top: 38px; width: 26px; height: 92px;
+    border-radius: 12px 12px 4px 4px;
+    background: linear-gradient(90deg, #e9e9ee 0 34%, #111 34% 66%, #e9e9ee 66%);
+    box-shadow: inset -3px 0 6px rgba(0,0,0,.25), 0 10px 14px -4px #000;
+    transform: rotateY(-28deg);
+    i { position: absolute; left: 50%; top: 10px; bottom: 10px; width: 2px; margin-left: -1px; background: rgba(60, 123, 224, .25); border-radius: 2px; }
+  }
+  .coffee {
+    position: absolute; left: 56px; right: 56px; top: 150px; height: 72px; border-radius: 12px;
+    background: linear-gradient(135deg, #7a321a, #3a1408);
+    box-shadow: inset 0 0 0 2px rgba(243, 213, 143, .2);
+    transform: rotateX(62deg);
+    transform-style: preserve-3d;
+  }
+  .pad {
+    position: absolute; top: 24px; width: 40px; height: 24px; border-radius: 12px 12px 16px 16px;
+    background: linear-gradient(#fafafa, #cfd0d6);
+    box-shadow: 0 4px 6px rgba(0,0,0,.5);
+    i { position: absolute; left: 12px; right: 12px; top: 4px; height: 8px; border-radius: 3px; background: #1a1a1f; }
+    &.p1 { left: 22px; transform: rotate(-12deg); }
+    &.p2 { right: 22px; transform: rotate(10deg); }
+  }
+}
+.running.slot .ps5 {
+  .console i { background: #4c8dff; box-shadow: 0 0 8px #4c8dff; }
+  .pad.p1 { animation: jiggle .35s ease-in-out infinite alternate; }
+  .pad.p2 { animation: jiggle .42s ease-in-out infinite alternate-reverse; }
+}
+@keyframes scroll { to { background-position: -120px 0, -160px 0, 0 0; } }
+@keyframes hop { to { transform: translateY(-14px); } }
+@keyframes jiggle { from { translate: -1px 0; } to { translate: 2px -1px; } }
+
+// ---------- Racing simulator ----------
+.sim {
+  --glow: rgba(224, 83, 61, .45);
+  .screens { position: absolute; left: 50%; top: 4px; width: 0; height: 80px; transform-style: preserve-3d; }
+  .scr {
+    position: absolute; top: 0; width: 118px; height: 70px; overflow: hidden;
+    border: 3px solid #08080a; border-radius: 4px; background: #05070f;
+    box-shadow: 0 12px 20px -10px #000;
+    &.mid { left: -59px; }
+    &.left { left: -177px; transform-origin: right center; transform: rotateY(38deg); }
+    &.right { left: 59px; transform-origin: left center; transform: rotateY(-38deg); }
+  }
+  .road {
+    position: absolute; inset: 0;
+    background: linear-gradient(#0d1b3d, #3a2a6a 44%, #1a1a1d 44%);
+    &::after {
+      content: ''; position: absolute; inset: 44% 0 0;
+      clip-path: polygon(46% 0, 54% 0, 95% 100%, 5% 100%);
+      background:
+        linear-gradient(90deg, transparent 47%, rgba(255,255,255,.85) 47% 53%, transparent 53%) 0 0 / 100% 14px,
+        #2c2c30;
+      background-repeat: repeat-y;
+    }
+  }
+  .rig { position: absolute; left: 50%; top: 92px; width: 0; height: 130px; }
+  .base {
+    position: absolute; left: -104px; top: 52px; width: 208px; height: 90px; border-radius: 14px;
+    background: linear-gradient(135deg, #1b1b1f, #0a0a0c);
+    box-shadow: inset 0 0 0 2px rgba(224, 83, 61, .5), 0 14px 20px -6px #000;
+    transform: rotateX(68deg);
+  }
+  .wheel {
+    position: absolute; left: -27px; top: 0; width: 54px; height: 54px; z-index: 1;
+    border-radius: 50%; border: 7px solid #1d1d22;
+    box-shadow: inset 0 0 0 2px #3a3a42, 0 6px 10px -2px #000;
+    i { position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px; border-radius: 50%; background: #e0533d; box-shadow: 0 0 8px rgba(224, 83, 61, .7); }
+    &::before { content: ''; position: absolute; left: -2px; right: -2px; top: 50%; height: 5px; margin-top: -2.5px; background: #1d1d22; }
+  }
+  .seat {
+    position: absolute; left: -38px; top: 34px; width: 76px; height: 86px; z-index: 2;
+    border-radius: 30px 30px 12px 12px;
+    background:
+      linear-gradient(90deg, transparent 18%, rgba(255,255,255,.06) 18% 20%, transparent 20% 80%, rgba(255,255,255,.06) 80% 82%, transparent 82%),
+      linear-gradient(#8b1d2c, #3a0a12 70%, #1a0408);
+    box-shadow: inset 0 3px 0 rgba(255,255,255,.12), 0 10px 18px -6px #000;
+  }
+}
+.running.slot .sim {
+  .road::after { animation: lane .45s linear infinite; }
+  .wheel { animation: steer 2.2s ease-in-out infinite alternate; }
+}
+@keyframes lane { to { background-position: 0 14px, 0 0; } }
+@keyframes steer { 0% { transform: rotate(-24deg); } 100% { transform: rotate(20deg); } }
+
+// ---------- Floor-map icons ----------
+.mini-felt.type-ps5 { border-color: #2a2a30; background: radial-gradient(#3c7be0, #101a3a); }
+.mini-felt.type-simulator { border-color: #2a2a30; background: linear-gradient(#0d1b3d 45%, #2c2c30 45%); box-shadow: inset 0 -3px 0 #e0533d; }
+.dotball.run.gaming { --c: #3c7be0; box-shadow: 0 0 14px rgba(60, 123, 224, .6); }

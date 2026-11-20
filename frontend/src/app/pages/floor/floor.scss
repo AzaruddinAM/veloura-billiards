@@ -1,0 +1,248 @@
+// ================= Hero =================
+.hero {
+  display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 32px; align-items: end;
+  margin-bottom: 8px;
+  h1 { margin: 8px 0 10px; em { color: var(--gold-2); font-style: italic; } }
+  p { margin: 0; max-width: 520px; }
+}
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kpi {
+  display: grid; gap: 2px; padding: 12px 16px; border-radius: 14px;
+  background: rgba(0, 0, 0, .28); border: 1px solid var(--line-2);
+  .k { font-size: .68rem; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .v { font-size: 1.35rem; font-weight: 700; color: var(--ivory); small { color: var(--muted); font-size: .9rem; } }
+}
+
+// ================= 3D stage =================
+.stage {
+  position: relative; height: 500px; margin: 8px -24px 0;
+  perspective: 1500px; perspective-origin: 50% 20%;
+  overflow: hidden; cursor: grab; touch-action: pan-y; user-select: none;
+  scroll-margin-top: 66px;
+  outline: none;
+  &.grabbing { cursor: grabbing; }
+}
+.lamp-glow {
+  position: absolute; left: 50%; top: -160px; width: 760px; height: 520px; transform: translateX(-50%);
+  background: radial-gradient(closest-side, rgba(255, 226, 150, .16), rgba(255, 226, 150, .04) 60%, transparent);
+  pointer-events: none;
+}
+.floor-plane {
+  position: absolute; left: 50%; bottom: -120px; width: 1400px; height: 260px; transform: translateX(-50%);
+  background: radial-gradient(closest-side, rgba(19, 129, 82, .22), transparent);
+  pointer-events: none;
+}
+.scene {
+  position: absolute; inset: 0;
+  transform-style: preserve-3d;
+  &.smooth { transition: transform .9s cubic-bezier(.2, .8, .2, 1); }
+}
+.slot {
+  position: absolute; left: 50%; top: 50%;
+  width: 340px; height: 380px; margin: -170px 0 0 -170px;
+  display: flex; flex-direction: column; align-items: center;
+  perspective: 900px; perspective-origin: 50% -10%;
+  transition: opacity .6s ease;
+  backface-visibility: hidden;
+  cursor: pointer;
+}
+
+// --- Plaque (name + timer) ---
+.plaque {
+  display: grid; justify-items: center; gap: 2px;
+  padding: 10px 22px 12px; border-radius: 14px; margin-bottom: 18px; min-width: 210px;
+  background: linear-gradient(180deg, rgba(20, 12, 6, .9), rgba(10, 6, 3, .9));
+  border: 1px solid rgba(212, 166, 74, .35);
+  box-shadow: 0 10px 30px -10px #000, inset 0 1px 0 rgba(243, 213, 143, .25);
+  transition: transform .5s ease, box-shadow .5s;
+}
+.pname { font-family: var(--display); font-size: 1.25rem; font-weight: 700; color: var(--ivory); letter-spacing: .04em; }
+.ptimer { font-size: 1.6rem; font-weight: 700; color: rgba(244, 236, 219, .35); letter-spacing: .06em; }
+.running .ptimer { color: var(--felt-glow); text-shadow: 0 0 18px rgba(47, 213, 138, .55); }
+.front .plaque { transform: translateY(-4px) scale(1.06); box-shadow: 0 16px 40px -10px #000, 0 0 0 1px rgba(243, 213, 143, .45), inset 0 1px 0 rgba(243, 213, 143, .3); }
+
+// --- 3D table ---
+.table3d {
+  --felt-a: #18a065; --felt-b: #0d6a42; --felt-c: #07402a;
+  position: relative; width: 300px; height: 158px; margin-top: 18px;
+  transform-style: preserve-3d;
+  transform: rotateX(60deg);
+  transition: transform .6s cubic-bezier(.2, .8, .2, 1);
+  &.type-snooker { --felt-a: #1b9256; --felt-b: #0f5e36; --felt-c: #073a22; }
+  &.type-carom { --felt-a: #2f7fd0; --felt-b: #1d5596; --felt-c: #0d2f5c; }
+}
+.slot:hover .table3d, .front .table3d { transform: rotateX(56deg) translateZ(6px); }
+.top, .felt { transform-style: preserve-3d; }
+.top {
+  position: absolute; inset: 0; padding: 13px; border-radius: 14px;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.07), transparent 20%, transparent 80%, rgba(255,255,255,.07)),
+    linear-gradient(135deg, #a24a26, var(--wood) 55%, #2b0e06);
+  box-shadow: inset 0 0 0 2px rgba(243, 213, 143, .22), inset 0 -3px 6px rgba(0,0,0,.5);
+}
+.felt {
+  position: relative; width: 100%; height: 100%; border-radius: 4px;
+  background: radial-gradient(ellipse at 50% 40%, var(--felt-a), var(--felt-b) 55%, var(--felt-c));
+  box-shadow: inset 0 0 18px rgba(0,0,0,.55);
+  transition: filter .5s;
+  filter: brightness(.75) saturate(.8);
+}
+.running .felt, .front .felt { filter: none; }
+.running .felt { box-shadow: inset 0 0 18px rgba(0,0,0,.45), 0 0 26px rgba(47, 213, 138, .35); }
+.baulk { position: absolute; left: 22%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,.12); }
+.type-carom .baulk { display: none; }
+.pocket {
+  position: absolute; width: 16px; height: 16px; margin: -8px; border-radius: 50%;
+  background: radial-gradient(#000 55%, #2a0f05 75%, rgba(243,213,143,.4));
+}
+.ball {
+  position: absolute; width: 11px; height: 11px; margin: -11px 0 0 -5.5px; border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #fff 0 10%, var(--c) 36%, #000 135%);
+  transform-origin: 50% 100%;
+  transform: rotateX(-60deg);
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.3);
+  &.stripe { background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.9) 0 10%, transparent 30%), linear-gradient(#f4ecdb 0 28%, var(--c) 28% 72%, #f4ecdb 72%); }
+}
+.running .ball.cue { animation: roll 4.5s cubic-bezier(.3, .6, .3, 1) infinite alternate; }
+@keyframes roll { 0% { translate: 0 0; } 60% { translate: 90px 18px; } 100% { translate: 70px 24px; } }
+
+.apron {
+  position: absolute; left: 4px; right: 4px; top: 100%; height: 22px;
+  transform-origin: top; transform: rotateX(-90deg);
+  background: linear-gradient(180deg, #7a321a, #3a1408);
+  border-radius: 0 0 8px 8px;
+  box-shadow: inset 0 2px 0 rgba(243, 213, 143, .25);
+}
+.leg {
+  position: absolute; width: 16px; height: 72px; top: calc(100% - 18px);
+  transform-origin: top; transform: rotateX(-90deg);
+  background: linear-gradient(90deg, #2b0e06, #6b2a14 45%, #2b0e06);
+  border-radius: 3px 3px 6px 6px;
+  &.l1 { left: 16px; } &.l2 { right: 16px; }
+  &.l3 { left: 16px; top: 4px; } &.l4 { right: 16px; top: 4px; }
+}
+.shadow {
+  position: absolute; inset: -6px -20px;
+  transform: translateZ(-74px);
+  background: radial-gradient(closest-side, rgba(0,0,0,.75), transparent);
+  filter: blur(6px);
+}
+.ring {
+  position: absolute; left: -16%; top: -34%; width: 132%; height: 168%;
+  transform: translateZ(-73px); overflow: visible; pointer-events: none;
+  circle {
+    fill: none; stroke: var(--felt-glow); stroke-width: 2.2; stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+    transform: rotate(-90deg); transform-origin: 50% 50%;
+    filter: drop-shadow(0 0 6px rgba(47, 213, 138, .9));
+    transition: stroke-dasharray .3s linear;
+  }
+}
+
+.nav-arrow {
+  position: absolute; top: 50%; z-index: 5; width: 52px; height: 52px; font-size: 1.8rem; line-height: 1;
+  background: rgba(6, 17, 12, .7); backdrop-filter: blur(6px);
+  &.left { left: 32px; } &.right { right: 32px; }
+}
+.stage-empty { position: absolute; inset: 0; display: grid; place-content: center; }
+
+// ================= Ball dots =================
+.dots { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 24px; }
+.dotball {
+  --c: #4a5a52;
+  width: 30px; height: 30px; border-radius: 50%; border: 0; cursor: pointer; padding: 0;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.6) 0 7%, transparent 24%), radial-gradient(circle, var(--c) 60%, #000 150%);
+  box-shadow: 0 4px 10px -2px #000;
+  transition: transform .3s cubic-bezier(.2, .9, .3, 1.4);
+  i { font-style: normal; width: 15px; height: 15px; border-radius: 50%; background: var(--ivory); color: #111; font-size: .6rem; font-weight: 800; display: grid; place-items: center; }
+  &.run { --c: #17a463; box-shadow: 0 0 14px rgba(47, 213, 138, .6); }
+  &.on { transform: scale(1.3); outline: 2px solid var(--gold); outline-offset: 3px; }
+  &:hover { transform: scale(1.15) rotate(20deg); }
+}
+
+// ================= Control desk =================
+.desk {
+  display: grid; grid-template-columns: minmax(200px, 1fr) minmax(0, 2fr) auto; gap: 24px; align-items: center;
+  margin-bottom: 28px; border-color: rgba(212, 166, 74, .3);
+  h2 { font-size: 2.2rem; margin: 2px 0 8px; }
+  &.running { border-color: rgba(47, 213, 138, .45); box-shadow: var(--shadow), 0 0 0 1px rgba(47, 213, 138, .15), 0 0 60px -20px rgba(47, 213, 138, .5); }
+}
+.desk-timer { display: grid; gap: 10px; }
+.big { font-size: clamp(2.6rem, 6vw, 4.2rem); font-weight: 700; color: var(--felt-glow); letter-spacing: .04em; line-height: 1; text-shadow: 0 0 30px rgba(47, 213, 138, .35); }
+.desk-figs {
+  display: flex; flex-wrap: wrap; gap: 24px;
+  div { display: grid; gap: 2px; }
+  .k { font-size: .68rem; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  strong { font-size: 1.05rem; }
+}
+.desk-actions { display: grid; gap: 8px; justify-items: center; }
+.desk-start {
+  grid-column: 2 / -1; display: grid; grid-template-columns: 1.3fr 1.3fr .6fr auto; gap: 12px; align-items: end;
+}
+
+// ================= Floor map =================
+.map { margin-top: 8px; }
+.map-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.mini {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; text-align: left;
+  padding: 12px 14px; border-radius: 14px; cursor: pointer; color: var(--text); font: inherit;
+  background: rgba(0, 0, 0, .25); border: 1px solid var(--line-2);
+  transition: border-color .2s, transform .2s, background .2s;
+  &:hover { transform: translateY(-2px); border-color: var(--line); }
+  &.on { border-color: var(--gold); background: rgba(212, 166, 74, .07); }
+  &.running .mono { color: var(--felt-glow); }
+}
+.mini-felt {
+  width: 44px; height: 24px; border-radius: 4px; border: 3px solid var(--wood-2);
+  background: radial-gradient(#18a065, #0b4f33);
+  &.type-carom { background: radial-gradient(#2f7fd0, #163f78); }
+}
+.mini-body { display: grid; line-height: 1.25; strong { font-size: .92rem; } .mono { font-size: .8rem; color: var(--muted); } }
+.mini-amt { font-size: .82rem; color: var(--gold-2); }
+
+// ================= Modal bits =================
+.stop-form { display: grid; gap: 12px; margin-top: 18px; }
+.small { font-size: .8rem; margin: 12px 0 0; }
+.receipt { padding: 4px 0; }
+
+// ================= Responsive =================
+@media (max-width: 960px) {
+  .hero { grid-template-columns: 1fr; }
+  .desk { grid-template-columns: 1fr; }
+  .desk-start { grid-column: auto; grid-template-columns: 1fr 1fr; }
+  .desk-actions { justify-items: stretch; }
+}
+@media (max-width: 640px) {
+  // Compact hero so the 3D floor is visible on the first screen
+  .hero { gap: 12px; margin-bottom: 0; h1 { font-size: 1.65rem; margin: 4px 0 0; } p { display: none; } }
+  .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .kpi {
+    padding: 8px 8px; border-radius: 10px; text-align: center; justify-items: center;
+    .k { font-size: .52rem; letter-spacing: .06em; line-height: 1.2; min-height: 2.4em; display: flex; align-items: center; }
+    .v { font-size: .92rem; small { font-size: .7rem; } }
+  }
+  .stage { height: 360px; margin: 0 -16px; perspective: 1000px; perspective-origin: 50% 10%; }
+  // (slot shrink on phones is applied inside its transform — see FloorPage.slotScale)
+  .lamp-glow { width: 460px; }
+  .nav-arrow { width: 40px; height: 40px; font-size: 1.5rem; &.left { left: 8px; } &.right { right: 8px; } }
+
+  // Ball dots: one swipeable row with comfortable tap size
+  .dots {
+    flex-wrap: nowrap; justify-content: safe center; overflow-x: auto; scrollbar-width: none;
+    margin: 0 -16px 16px; padding: 8px 16px; gap: 8px; scroll-snap-type: x proximity;
+    &::-webkit-scrollbar { display: none; }
+  }
+  .dotball { flex: none; width: 36px; height: 36px; scroll-snap-align: center; &.on { transform: scale(1.18); } i { width: 17px; height: 17px; } }
+
+  .desk { gap: 14px; padding: 16px; scroll-margin-top: 76px; h2 { font-size: 1.7rem; } }
+  .big { font-size: 2.7rem; }
+  .desk-figs { gap: 14px 20px; strong { font-size: .95rem; } }
+  .desk-start {
+    grid-template-columns: minmax(0, 1fr) 84px; gap: 10px;
+    .field:first-child, .btn { grid-column: 1 / -1; }
+  }
+  .desk-actions { grid-template-columns: 1fr; }
+  .map-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .mini { padding: 10px 12px; }
+}

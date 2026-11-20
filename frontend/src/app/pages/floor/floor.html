@@ -1,0 +1,254 @@
+<div class="page floor">
+  <section class="hero">
+    <div>
+      <div class="eyebrow">Live floor · {{ auth.settings().business_name }}</div>
+      <h1>Every rack, <em>on the clock.</em></h1>
+      <p class="muted">Spin the floor, pick a table, start the timer. Billing is calculated to the minute when you stop.</p>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><span class="k">Running</span><span class="v mono">{{ running() }}<small>/{{ count() }}</small></span></div>
+      <div class="kpi"><span class="k">On the clock now</span><span class="v mono">{{ liveTotal() | money }}</span></div>
+      <div class="kpi"><span class="k">Billed today</span><span class="v mono">{{ today().revenue | money }}</span></div>
+      <div class="kpi"><span class="k">Table time today</span><span class="v mono">{{ today().minutes | mins }}</span></div>
+    </div>
+  </section>
+
+  <!-- ===== 3D carousel of tables ===== -->
+  <section
+    #stage
+    class="stage"
+    [class.grabbing]="dragging()"
+    (pointerdown)="onPointerDown($event)"
+    (pointermove)="onPointerMove($event, stage)"
+    (pointerup)="onPointerUp()"
+    (pointercancel)="onPointerUp()"
+    (pointerleave)="onLeave()"
+    aria-label="Tables carousel. Use left and right arrow keys to switch tables."
+  >
+    <div class="lamp-glow"></div>
+    <div class="scene" [style.transform]="sceneTransform()" [class.smooth]="!dragging()">
+      @for (t of tables(); track t.id; let i = $index) {
+        <div
+          class="slot"
+          [attr.data-i]="i"
+          [style.transform]="slotTransform(i)"
+          [style.opacity]="slotOpacity(i)"
+          [class.front]="i === active()"
+          [class.running]="!!t.session"
+        >
+          <div class="plaque">
+            <span class="pname">{{ t.name }}</span>
+            <span class="ptimer mono">{{ elapsed(t) }}</span>
+            <span class="pmeta">
+              @if (t.session) {
+                <span class="chip green"><span class="dot"></span>{{ estimate(t).amount | money }}</span>
+              } @else {
+                <span class="chip">{{ t.rate_per_hour | money }}/hr</span>
+              }
+            </span>
+          </div>
+
+          @if (t.type === 'ps5') {
+            <!-- Console bay: TV, console tower, coffee table with two controllers -->
+            <div class="station ps5">
+              <div class="glow"></div>
+              <div class="tv">
+                <div class="screen">
+                  @if (t.session) {
+                    <span class="hud mono">P1 ▸ {{ elapsed(t) }}</span>
+                    <span class="scene-sky"></span><span class="scene-hills"></span><span class="scene-runner"></span>
+                  } @else {
+                    <span class="idle-txt">PRESS START</span>
+                  }
+                </div>
+              </div>
+              <div class="tv-stand"></div>
+              <div class="console"><i></i></div>
+              <div class="coffee">
+                <span class="pad p1"><i></i></span><span class="pad p2"><i></i></span>
+              </div>
+            </div>
+          } @else if (t.type === 'simulator') {
+            <!-- Racing rig: triple wrap-around screens, wheel and bucket seat -->
+            <div class="station sim">
+              <div class="glow"></div>
+              <div class="screens">
+                <div class="scr left"><span class="road"></span></div>
+                <div class="scr mid"><span class="road"></span>@if (t.session) { <span class="hud mono">LAP {{ lap(t) }} · {{ elapsed(t) }}</span> } @else { <span class="idle-txt">GRID READY</span> }</div>
+                <div class="scr right"><span class="road"></span></div>
+              </div>
+              <div class="rig">
+                <div class="wheel"><i></i></div>
+                <div class="seat"></div>
+                <div class="base"></div>
+              </div>
+            </div>
+          } @else {
+          <div class="table3d" [class]="'type-' + t.type">
+            <div class="shadow"></div>
+            <div class="leg l1"></div><div class="leg l2"></div><div class="leg l3"></div><div class="leg l4"></div>
+            <div class="apron"></div>
+            <div class="top">
+              <div class="felt">
+                @if (t.type !== 'carom') {
+                  @for (p of pockets; track $index) { <span class="pocket" [style.left.%]="p[0]" [style.top.%]="p[1]"></span> }
+                }
+                <span class="baulk"></span>
+                @for (b of balls(t); track $index) {
+                  <span class="ball" [class.stripe]="b.stripe" [class.cue]="b.cue" [style.left.%]="b.x" [style.top.%]="b.y" [style.--c]="b.c"></span>
+                }
+              </div>
+            </div>
+            @if (t.session) {
+              <svg class="ring" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <circle cx="50" cy="50" r="46" pathLength="1" [style.stroke-dasharray]="hourProgress(t) + ' 1'" />
+              </svg>
+            }
+          </div>
+          }
+        </div>
+      }
+    </div>
+    <div class="floor-plane"></div>
+
+    @if (count() > 1) {
+      <button class="nav-arrow left btn icon-btn" (click)="prev()" (pointerdown)="$event.stopPropagation()" aria-label="Previous table">‹</button>
+      <button class="nav-arrow right btn icon-btn" (click)="next()" (pointerdown)="$event.stopPropagation()" aria-label="Next table">›</button>
+    }
+    @if (loaded() && !count()) {
+      <div class="empty stage-empty"><div class="ball"></div>No tables yet. Add tables in Admin → Tables.</div>
+    }
+  </section>
+
+  <!-- ball dots -->
+  <div class="dots" role="tablist">
+    @for (t of tables(); track t.id; let i = $index) {
+      <button role="tab" [attr.aria-selected]="i === active()" class="dotball" [class.gaming]="isGaming(t)" [class.on]="i === active()" [class.run]="!!t.session" (click)="goTo(i)" [title]="t.name">
+        <i>{{ i + 1 }}</i>
+      </button>
+    }
+  </div>
+
+  <!-- ===== Control desk for the focused table ===== -->
+  @if (current(); as t) {
+    <section class="desk card" [class.running]="!!t.session">
+      <div class="desk-id">
+        <div class="eyebrow">{{ typeLabel(t.type) }} · {{ t.rate_per_hour | money }} per hour</div>
+        <h2>{{ t.name }}</h2>
+        @if (t.session) {
+          <span class="chip green"><span class="dot"></span>Running since {{ t.session.start_ts | ts: 'time' }}</span>
+        } @else {
+          <span class="chip gold">Available</span>
+        }
+      </div>
+
+      @if (t.session; as s) {
+        <div class="desk-timer">
+          <div class="big mono">{{ elapsed(t) }}</div>
+          <div class="desk-figs">
+            <div><span class="k">Player</span><strong>{{ s.customer_name }}</strong>@if (s.member_name) { <span class="chip blue">Member</span> }</div>
+            <div><span class="k">Billable</span><strong class="mono">{{ estimate(t).billed | mins }}</strong></div>
+            <div><span class="k">Amount so far</span><strong class="mono gold">{{ estimate(t).amount | money: 2 }}</strong></div>
+          </div>
+        </div>
+        <div class="desk-actions">
+          <button class="btn btn-red btn-lg" (click)="openStop(t)">■ Stop &amp; bill</button>
+          <button class="btn btn-ghost btn-sm" (click)="cancelSession(t)">Cancel session</button>
+        </div>
+      } @else {
+        <form class="desk-start" (ngSubmit)="start(t)">
+          <label class="field">{{ isGaming(t) ? "Gamer / group name" : "Player / group name" }}<input name="n" [(ngModel)]="startName" placeholder="Walk-in" /></label>
+          <label class="field">Member account
+            <select name="m" [(ngModel)]="startMember">
+              <option [ngValue]="null">— None (walk-in) —</option>
+              @for (m of activeMembers(); track m.id) { <option [ngValue]="m.id">{{ m.name }}{{ m.phone ? ' · ' + m.phone : '' }}</option> }
+            </select>
+          </label>
+          <label class="field">Players<input name="p" type="number" min="1" max="12" [(ngModel)]="startPlayers" /></label>
+          <button class="btn btn-felt btn-lg" type="submit" [disabled]="starting()">▶ Start timer</button>
+        </form>
+      }
+    </section>
+  }
+
+  <!-- ===== Floor map (compact list of all tables) ===== -->
+  <section class="map">
+    <div class="card-title"><h3>Floor map</h3><span class="muted">Tap a table to bring it forward</span></div>
+    <div class="map-grid">
+      @for (t of tables(); track t.id; let i = $index) {
+        <button class="mini" [class.on]="i === active()" [class.running]="!!t.session" (click)="pickFromMap(i)">
+          <span class="mini-felt" [class]="'mini-felt type-' + t.type"></span>
+          <span class="mini-body">
+            <strong>{{ t.name }}</strong>
+            <span class="mono">{{ t.session ? elapsed(t) : 'Free' }}</span>
+          </span>
+          <span class="mini-amt mono">{{ t.session ? (estimate(t).amount | money) : (t.rate_per_hour | money) + '/h' }}</span>
+        </button>
+      }
+    </div>
+  </section>
+</div>
+
+<!-- ===== Stop & bill modal ===== -->
+@if (stop(); as st) {
+  <div class="backdrop" (click)="!st.busy && stop.set(null)">
+    <div class="modal card" (click)="$event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="billTitle">
+      @if (!st.done) {
+        <div class="eyebrow">Stop &amp; bill</div>
+        <h2 id="billTitle">{{ st.table.name }}</h2>
+        <p class="muted">{{ st.session.customer_name }} · started {{ st.session.start_ts | ts }}</p>
+
+        <div class="bill-line"><span>Played</span><span class="mono">{{ st.quote.minutes | mins }}</span></div>
+        <div class="bill-line"><span>Billable time</span><span class="mono">{{ st.quote.billed_minutes | mins }}</span></div>
+        <div class="bill-line"><span>Rate</span><span class="mono">{{ st.session.rate_per_hour | money }}/hr</span></div>
+        <div class="bill-line"><span>Amount</span><span class="mono">{{ st.quote.amount | money: 2 }}</span></div>
+        <div class="bill-line total"><span>Total (approx.)</span><span class="mono">{{ (st.quote.amount - (st.discount || 0)) | money: 2 }}</span></div>
+
+        <div class="stop-form">
+          <label class="field">Payment</label>
+          <div class="seg">
+            @for (m of ['cash', 'upi', 'card', 'account']; track m) {
+              <button type="button" [class.on]="st.method === m" (click)="patchStop({ method: $any(m) })">{{ m === 'account' ? 'On account' : m.toUpperCase() }}</button>
+            }
+          </div>
+          @if (st.method === 'account') {
+            <label class="field">Charge to member
+              <select [ngModel]="st.memberId" (ngModelChange)="patchStop({ memberId: $event })">
+                <option [ngValue]="null">— Choose member —</option>
+                @for (m of activeMembers(); track m.id) { <option [ngValue]="m.id">{{ m.name }} (bal {{ m.balance | money }})</option> }
+              </select>
+            </label>
+          }
+          <div class="form-grid">
+            <label class="field">Discount<input type="number" min="0" [ngModel]="st.discount" (ngModelChange)="patchStop({ discount: +$event })" /></label>
+            <label class="field">Note<input [ngModel]="st.notes" (ngModelChange)="patchStop({ notes: $event })" placeholder="Optional" /></label>
+          </div>
+        </div>
+        <p class="muted small">Final amount is calculated by the server at the moment you confirm.</p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" (click)="stop.set(null)" [disabled]="st.busy">Keep playing</button>
+          <button class="btn btn-gold" (click)="confirmStop()" [disabled]="st.busy || (st.method === 'account' && !st.memberId)">
+            {{ st.busy ? 'Billing…' : 'Confirm & stop' }}
+          </button>
+        </div>
+      } @else {
+        <div class="receipt">
+          <div class="eyebrow">Receipt #{{ st.done.id }}</div>
+          <h2>{{ auth.settings().business_name }}</h2>
+          <p class="muted">{{ st.done.table_name }} · {{ st.done.customer_name }}</p>
+          <div class="bill-line"><span>Start</span><span class="mono">{{ st.done.start_ts | ts }}</span></div>
+          <div class="bill-line"><span>End</span><span class="mono">{{ st.done.end_ts | ts }}</span></div>
+          <div class="bill-line"><span>Billed time</span><span class="mono">{{ st.done.billed_minutes | mins }}</span></div>
+          <div class="bill-line"><span>Amount</span><span class="mono">{{ st.done.amount | money: 2 }}</span></div>
+          @if (st.done.discount) { <div class="bill-line"><span>Discount</span><span class="mono">−{{ st.done.discount | money: 2 }}</span></div> }
+          <div class="bill-line"><span>Paid by</span><span>{{ st.done.payment_method === 'account' ? 'Account · ' + st.done.member_name : (st.done.payment_method ?? '').toUpperCase() }}</span></div>
+          <div class="bill-line total"><span>Total</span><span class="mono">{{ st.done.total | money: 2 }}</span></div>
+        </div>
+        <div class="modal-actions no-print">
+          <button class="btn btn-ghost" (click)="printReceipt()">Print</button>
+          <button class="btn btn-gold" (click)="stop.set(null)">Done</button>
+        </div>
+      }
+    </div>
+  </div>
+}
