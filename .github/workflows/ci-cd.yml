@@ -85,20 +85,38 @@ jobs:
           PASSWORD_AS_VARIABLE: ${{ vars.FTP_PASSWORD != '' }}
         run: |
           missing=()
-          for name in FTP_SERVER FTP_USERNAME FTP_PASSWORD FTP_SERVER_DIR; do
+          for name in FTP_SERVER FTP_USERNAME FTP_PASSWORD; do
             if [ -n "${!name}" ]; then echo "✓ $name is set"; else echo "✗ $name is missing"; missing+=("$name"); fi
           done
           if [ "$PASSWORD_AS_VARIABLE" = "true" ]; then
             echo "::warning title=FTP_PASSWORD is a Variable::Variables are visible to anyone who can read the repo settings. Delete it and add FTP_PASSWORD under the Secrets tab instead."
           fi
           if [ ${#missing[@]} -eq 0 ]; then
-            dir="$FTP_SERVER_DIR"; [[ "$dir" == */ ]] || dir="$dir/"
-            echo "DEPLOY_DIR=$dir" >> "$GITHUB_ENV"
+            if [ -n "$FTP_SERVER_DIR" ]; then
+              dir="${FTP_SERVER_DIR#/}"; [[ "$dir" == */ ]] || dir="$dir/"
+              echo "✓ FTP_SERVER_DIR is set"
+              echo "DEPLOY_DIR=$dir" >> "$GITHUB_ENV"
+            else
+              echo "· FTP_SERVER_DIR not set — the next step will look for the subdomain folder"
+            fi
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "::notice title=Deploy skipped::Missing in Settings → Secrets and variables → Actions: ${missing[*]}"
           fi
+
+      - uses: actions/checkout@v5
+        if: steps.cfg.outputs.ready == 'true' && env.DEPLOY_DIR == ''
+        with:
+          sparse-checkout: .github/scripts
+
+      - name: Find the subdomain folder on the server
+        if: steps.cfg.outputs.ready == 'true' && env.DEPLOY_DIR == ''
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER || vars.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME || vars.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: bash .github/scripts/find-ftp-dir.sh
 
       - name: Download release bundle
         if: steps.cfg.outputs.ready == 'true'
