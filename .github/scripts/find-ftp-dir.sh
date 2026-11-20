@@ -46,6 +46,27 @@ echo "FTP_HOST_CLEAN=$HOST" >> "$GITHUB_ENV"
 echo "FTP_USER_CLEAN=$USER_" >> "$GITHUB_ENV"
 echo "FTP login folder contains: $(echo "$root" | tr '\n' ' ')"
 
+# Is the FTP login folder itself the website's document root? (e.g. an FTP account created
+# for the subdomain folder.) Prove it: upload a random probe file and fetch it over HTTPS.
+probe="vb-probe-$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n').txt"
+echo "veloura-deploy-probe" > "/tmp/$probe"
+if curl -s --max-time 25 --ftp-ssl --insecure -T "/tmp/$probe" --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/$probe" 2>/dev/null \
+   || curl -s --max-time 25 -T "/tmp/$probe" --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/$probe" 2>/dev/null; then
+  body=$(curl -s --max-time 20 "https://$FQDN/$probe" || true)
+  # always clean up the probe
+  curl -s --max-time 25 --ftp-ssl --insecure --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/" -Q "DELE $probe" -o /dev/null 2>/dev/null \
+    || curl -s --max-time 25 --user "$USER_:$FTP_PASSWORD" "ftp://$HOST/" -Q "DELE $probe" -o /dev/null 2>/dev/null || true
+  if [ "$body" = "veloura-deploy-probe" ]; then
+    echo "✓ the FTP login folder is $FQDN's document root"
+    echo "DEPLOY_DIR=./" >> "$GITHUB_ENV"
+    echo "::notice title=Using FTP folder ./::The FTP account opens directly in $FQDN's folder (verified with a probe file). To pin it, add a repository variable FTP_SERVER_DIR = ./"
+    exit 0
+  fi
+  echo "· the FTP login folder is not $FQDN's document root"
+else
+  echo "· could not upload a probe file to the FTP login folder"
+fi
+
 found=()
 for c in "${CANDIDATES[@]}"; do
   if ftp_ls "$c/" >/dev/null; then echo "✓ found $c/"; found+=("$c"); else echo "· no $c/"; fi
