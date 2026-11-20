@@ -73,19 +73,31 @@ jobs:
       group: deploy-production
       cancel-in-progress: false
     steps:
-      - name: Check deployment secrets
+      # Each setting may be stored as a repository/environment Secret or Variable.
+      # Only names are ever printed — never values.
+      - name: Check deployment settings
         id: cfg
         env:
-          FTP_SERVER: ${{ secrets.FTP_SERVER }}
-          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER || vars.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME || vars.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-          FTP_SERVER_DIR: ${{ vars.FTP_SERVER_DIR }}
+          FTP_SERVER_DIR: ${{ secrets.FTP_SERVER_DIR || vars.FTP_SERVER_DIR }}
+          PASSWORD_AS_VARIABLE: ${{ vars.FTP_PASSWORD != '' }}
         run: |
-          if [ -n "$FTP_SERVER" ] && [ -n "$FTP_USERNAME" ] && [ -n "$FTP_PASSWORD" ] && [ -n "$FTP_SERVER_DIR" ]; then
+          missing=()
+          for name in FTP_SERVER FTP_USERNAME FTP_PASSWORD FTP_SERVER_DIR; do
+            if [ -n "${!name}" ]; then echo "✓ $name is set"; else echo "✗ $name is missing"; missing+=("$name"); fi
+          done
+          if [ "$PASSWORD_AS_VARIABLE" = "true" ]; then
+            echo "::warning title=FTP_PASSWORD is a Variable::Variables are visible to anyone who can read the repo settings. Delete it and add FTP_PASSWORD under the Secrets tab instead."
+          fi
+          if [ ${#missing[@]} -eq 0 ]; then
+            dir="$FTP_SERVER_DIR"; [[ "$dir" == */ ]] || dir="$dir/"
+            echo "DEPLOY_DIR=$dir" >> "$GITHUB_ENV"
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Deploy skipped::Add FTP_SERVER, FTP_USERNAME, FTP_PASSWORD secrets and the FTP_SERVER_DIR variable to deploy."
+            echo "::notice title=Deploy skipped::Missing in Settings → Secrets and variables → Actions: ${missing[*]}"
           fi
 
       - name: Download release bundle
@@ -99,14 +111,14 @@ jobs:
         if: steps.cfg.outputs.ready == 'true'
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
+          server: ${{ secrets.FTP_SERVER || vars.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME || vars.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ${{ vars.FTP_PROTOCOL || 'ftps' }}
           port: ${{ vars.FTP_PORT || 21 }}
           local-dir: release/
           # Folder on the server that holds .htaccess, public/, src/, data/… (the subdomain folder) — must end with a slash.
-          server-dir: ${{ vars.FTP_SERVER_DIR }}
+          server-dir: ${{ env.DEPLOY_DIR }}
           # Normal deploys never touch the live database or the server-only config.
           exclude: |
             **/data/*.sqlite*
