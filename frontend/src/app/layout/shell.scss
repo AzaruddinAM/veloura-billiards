@@ -49,3 +49,9 @@ main { position: relative; }
   .nav-link { flex-direction: column; gap: 4px; padding: 4px 8px; }
   main { padding-bottom: 80px; }
 }
+.nav-link { position: relative; }
+.badge {
+  position: absolute; top: 2px; left: 24px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  display: grid; place-items: center; font: 800 .65rem var(--sans); color: #1b1206;
+  background: var(--warn); box-shadow: 0 0 0 2px var(--bg), 0 0 10px rgba(240, 181, 69, .7);
+}

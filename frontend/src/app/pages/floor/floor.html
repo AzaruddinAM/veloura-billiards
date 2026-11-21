@@ -42,6 +42,8 @@
             <span class="pmeta">
               @if (t.session) {
                 <span class="chip green"><span class="dot"></span>{{ estimate(t).amount | money }}</span>
+              } @else if (soonBooking(t); as nb) {
+                <span class="chip gold">Booked {{ bookingTime(nb) }}</span>
               } @else {
                 <span class="chip">{{ t.rate_per_hour | money }}/hr</span>
               }
@@ -156,6 +158,16 @@
           <button class="btn btn-ghost btn-sm" (click)="cancelSession(t)">Cancel session</button>
         </div>
       } @else {
+        @if (t.next_booking; as nb) {
+          <div class="desk-booking">
+            <div>
+              <span class="k">{{ nb.status === 'pending' ? 'Booking request' : 'Booked' }} · {{ bookingTime(nb) }}</span>
+              <strong>{{ nb.customer_name }}</strong>
+              <span class="muted">{{ nb.players }} players · <a [href]="'tel:' + nb.phone">{{ nb.phone }}</a></span>
+            </div>
+            <button class="btn btn-gold" type="button" (click)="seatBooking(t, nb)" [disabled]="starting()">▶ Seat booking</button>
+          </div>
+        }
         <form class="desk-start" (ngSubmit)="start(t)">
           <label class="field">{{ isGaming(t) ? "Gamer / group name" : "Player / group name" }}<input name="n" [(ngModel)]="startName" placeholder="Walk-in" /></label>
           <label class="field">Member account

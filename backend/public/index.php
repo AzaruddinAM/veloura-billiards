@@ -4,9 +4,15 @@ declare(strict_types=1);
 $config = require __DIR__ . '/../config.php';
 date_default_timezone_set($config['timezone']);
 
+// Never print PHP warnings into API responses (that would corrupt the JSON); log them instead.
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+error_reporting(E_ALL);
+
 require __DIR__ . '/../src/Http.php';
 require __DIR__ . '/../src/Db.php';
 require __DIR__ . '/../src/Services.php';
+require __DIR__ . '/../src/Bookings.php';
 require __DIR__ . '/../src/routes.php';
 
 // When run with `php -S`, let the built-in server serve real static files (e.g. the built Angular app).

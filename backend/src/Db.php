@@ -60,9 +60,45 @@ final class Db
                 self::run('INSERT INTO pool_tables (name, type, rate_per_hour, sort_order, active) VALUES (?,?,?,?,1)',
                     [$name, $type, $rate, $order + $i + 1]);
             }
-            self::run("DELETE FROM settings WHERE k = 'schema_version'");
-            self::run("INSERT INTO settings (k, v) VALUES ('schema_version', '2')");
+            self::setVersion(2);
         }
+        if ($version < 3) {
+            // v3: online bookings + booking settings.
+            $mysql = self::driver() === 'mysql';
+            $id = $mysql ? 'INT AUTO_INCREMENT PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+            $str = fn(int $n) => $mysql ? "VARCHAR($n)" : 'TEXT';
+            self::pdo()->exec("CREATE TABLE IF NOT EXISTS bookings (
+                id $id,
+                code {$str(12)} NOT NULL UNIQUE,
+                table_id INT NOT NULL,
+                customer_name {$str(120)} NOT NULL,
+                phone {$str(30)} NOT NULL,
+                email {$str(120)},
+                players INT NOT NULL DEFAULT 2,
+                start_ts INT NOT NULL,
+                end_ts INT NOT NULL,
+                status {$str(20)} NOT NULL DEFAULT 'pending',
+                notes TEXT,
+                source {$str(20)} NOT NULL DEFAULT 'online',
+                session_id INT NULL,
+                created_at INT NOT NULL,
+                updated_by INT NULL
+            )" . ($mysql ? ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4' : ''));
+            self::pdo()->exec('CREATE INDEX idx_bookings_table_time ON bookings (table_id, start_ts)');
+            foreach ([
+                'booking_enabled' => '1', 'booking_auto_confirm' => '0', 'open_time' => '10:00', 'close_time' => '23:00',
+                'slot_minutes' => '30', 'booking_max_days' => '14', 'booking_min_notice' => '30',
+            ] as $k => $v) {
+                if (self::scalar('SELECT 1 FROM settings WHERE k = ?', [$k]) === null) self::run('INSERT INTO settings (k, v) VALUES (?,?)', [$k, $v]);
+            }
+            self::setVersion(3);
+        }
+    }
+
+    private static function setVersion(int $v): void
+    {
+        self::run("DELETE FROM settings WHERE k = 'schema_version'");
+        self::run("INSERT INTO settings (k, v) VALUES ('schema_version', ?)", [(string) $v]);
     }
 
     private static function install(): void

@@ -66,14 +66,43 @@ final class Settings
         foreach (Db::all('SELECT k, v FROM settings') as $r) $out[$r['k']] = $r['v'];
         $out['round_to_minutes'] = max(1, (int) ($out['round_to_minutes'] ?? 1));
         $out['min_minutes'] = max(0, (int) ($out['min_minutes'] ?? 0));
+        $out['booking_enabled'] = ($out['booking_enabled'] ?? '1') === '1';
+        $out['booking_auto_confirm'] = ($out['booking_auto_confirm'] ?? '0') === '1';
+        $out['open_time'] = self::hhmm($out['open_time'] ?? '10:00', '10:00');
+        $out['close_time'] = self::hhmm($out['close_time'] ?? '23:00', '23:00');
+        $out['slot_minutes'] = in_array((int) ($out['slot_minutes'] ?? 30), [15, 30, 60], true) ? (int) $out['slot_minutes'] : 30;
+        $out['booking_max_days'] = min(90, max(1, (int) ($out['booking_max_days'] ?? 14)));
+        $out['booking_min_notice'] = min(1440, max(0, (int) ($out['booking_min_notice'] ?? 30)));
+        unset($out['schema_version']);
+        $out['timezone'] = date_default_timezone_get();
         return $out;
+    }
+
+    /** Only what the public booking page needs. */
+    public static function publicView(): array
+    {
+        $s = self::all();
+        return array_intersect_key($s, array_flip([
+            'business_name', 'currency', 'address', 'phone', 'booking_enabled', 'open_time', 'close_time',
+            'slot_minutes', 'booking_max_days', 'booking_min_notice',
+        ])) + ['timezone' => date_default_timezone_get()];
+    }
+
+    private static function hhmm(string $v, string $fallback): string
+    {
+        return preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $v) ? $v : $fallback;
     }
 
     public static function save(array $data): array
     {
-        $allowed = ['business_name', 'currency', 'round_to_minutes', 'min_minutes', 'address', 'phone'];
+        $allowed = ['business_name', 'currency', 'round_to_minutes', 'min_minutes', 'address', 'phone',
+            'booking_enabled', 'booking_auto_confirm', 'open_time', 'close_time', 'slot_minutes', 'booking_max_days', 'booking_min_notice'];
+        foreach (['open_time', 'close_time'] as $k) {
+            if (isset($data[$k]) && !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', (string) $data[$k])) throw new HttpError(422, 'Times must be HH:MM');
+        }
         foreach ($allowed as $k) {
             if (!array_key_exists($k, $data)) continue;
+            if (is_bool($data[$k])) $data[$k] = $data[$k] ? '1' : '0';
             Db::run('DELETE FROM settings WHERE k = ?', [$k]);
             Db::run('INSERT INTO settings (k, v) VALUES (?, ?)', [$k, (string) $data[$k]]);
         }

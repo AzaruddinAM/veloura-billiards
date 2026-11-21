@@ -42,11 +42,20 @@ function register_routes(Router $r, array $config): void
         }
         [$dayStart] = [mktime(0, 0, 0)];
         $today = Db::one('SELECT COUNT(*) c, COALESCE(SUM(total),0) revenue, COALESCE(SUM(billed_minutes),0) minutes FROM sessions WHERE end_ts >= ?', [$dayStart]);
+        // Next upcoming booking per table within 24h
+        $now = time();
+        $next = [];
+        foreach (Db::all("SELECT id, code, table_id, customer_name, phone, players, start_ts, end_ts, status FROM bookings
+            WHERE status IN ('pending','confirmed') AND end_ts > ? AND start_ts < ? ORDER BY start_ts", [$now, $now + 86400]) as $b) {
+            $next[(int) $b['table_id']] ??= Bookings::row($b);
+        }
+        $pendingCount = (int) Db::scalar("SELECT COUNT(*) FROM bookings WHERE status = 'pending' AND end_ts > ?", [$now]);
         return [
-            'server_time' => time(),
+            'server_time' => $now,
             'settings' => Settings::all(),
-            'tables' => array_map(fn($t) => [...$t, 'session' => $live[$t['id']] ?? null], $tables),
+            'tables' => array_map(fn($t) => [...$t, 'session' => $live[$t['id']] ?? null, 'next_booking' => $next[$t['id']] ?? null], $tables),
             'today' => ['sessions' => (int) $today['c'], 'revenue' => round((float) $today['revenue'], 2), 'minutes' => (int) $today['minutes']],
+            'pending_bookings' => $pendingCount,
         ];
     });
 
@@ -302,6 +311,76 @@ function register_routes(Router $r, array $config): void
         }
         if (!$active) Db::run('DELETE FROM auth_tokens WHERE user_id = ?', [$id]);
         return ['ok' => true];
+    });
+
+    // ---------- Public online booking (no sign-in) ----------
+    $r->add('GET', '/public/info', fn() => [
+        'settings' => Settings::publicView(),
+        'server_time' => time(),
+        'tables' => array_map(fn($t) => ['id' => (int) $t['id'], 'name' => $t['name'], 'type' => $t['type'], 'rate_per_hour' => (float) $t['rate_per_hour']],
+            Db::all('SELECT id, name, type, rate_per_hour FROM pool_tables WHERE active = 1 ORDER BY sort_order, id')),
+    ]);
+    $r->add('GET', '/public/availability', fn() => Bookings::availability((string) query('date', date('Y-m-d'))));
+    $r->add('POST', '/public/bookings', fn() => Bookings::publicRow(Bookings::create(body())));
+    $publicFind = function (string $code): array {
+        $phone = Bookings::phoneKey((string) (query('phone') ?? input('phone', '')));
+        $id = Db::scalar('SELECT id FROM bookings WHERE code = ? AND SUBSTR(phone, -10) = ?', [strtoupper(trim($code)), $phone]);
+        if (!$id) throw new HttpError(404, 'No booking found for that code and phone number');
+        return Bookings::find((int) $id);
+    };
+    $r->add('GET', '/public/bookings/{code}', fn($p) => Bookings::publicRow($publicFind($p['code'])));
+    $r->add('POST', '/public/bookings/{code}/cancel', function ($p) use ($publicFind) {
+        $b = $publicFind($p['code']);
+        if (!in_array($b['status'], Bookings::ACTIVE, true)) throw new HttpError(409, 'This booking can no longer be cancelled');
+        if ($b['start_ts'] <= time()) throw new HttpError(409, 'This booking has already started — please speak to the front desk');
+        Db::run("UPDATE bookings SET status = 'cancelled' WHERE id = ?", [$b['id']]);
+        return Bookings::publicRow(Bookings::find($b['id']));
+    });
+
+    // ---------- Staff: bookings ----------
+    $r->add('GET', '/bookings', function () {
+        Auth::user();
+        $date = (string) query('date', date('Y-m-d'));
+        [$from, $to] = Bookings::window($date, Settings::all());
+        $from = min($from, strtotime("$date 00:00:00"));
+        $to = max($to, strtotime("$date 00:00:00") + 86400);
+        return array_map([Bookings::class, 'row'], Db::all(
+            'SELECT b.*, t.name table_name, t.type table_type, t.rate_per_hour FROM bookings b JOIN pool_tables t ON t.id = b.table_id
+             WHERE b.start_ts < ? AND b.end_ts > ? ORDER BY b.start_ts, t.sort_order', [$to, $from]));
+    });
+    $r->add('GET', '/bookings/upcoming', function () {
+        Auth::user();
+        return array_map([Bookings::class, 'row'], Db::all(
+            "SELECT b.*, t.name table_name, t.type table_type, t.rate_per_hour FROM bookings b JOIN pool_tables t ON t.id = b.table_id
+             WHERE b.status IN ('pending','confirmed') AND b.end_ts > ? ORDER BY b.start_ts LIMIT 200", [time()]));
+    });
+    $r->add('POST', '/bookings', function () { return Bookings::create(body(), Auth::user()); });
+    $r->add('PUT', '/bookings/{id}/status', function ($p) {
+        $u = Auth::user();
+        $status = (string) required('status');
+        if (!in_array($status, ['pending', 'confirmed', 'cancelled', 'no_show', 'completed'], true)) throw new HttpError(422, 'Invalid status');
+        $b = Bookings::find((int) $p['id']);
+        if (in_array($status, Bookings::ACTIVE, true) && !in_array($b['status'], Bookings::ACTIVE, true)) {
+            // re-activating a cancelled/no-show booking: make sure the slot is still free
+            $clash = (int) Db::scalar("SELECT COUNT(*) FROM bookings WHERE table_id = ? AND id != ? AND status IN ('pending','confirmed') AND start_ts < ? AND end_ts > ?",
+                [$b['table_id'], $b['id'], $b['end_ts'], $b['start_ts']]);
+            if ($clash) throw new HttpError(409, 'Another booking now holds this slot on the same table');
+        }
+        Db::run('UPDATE bookings SET status = ?, updated_by = ? WHERE id = ?', [$status, $u['id'], $b['id']]);
+        return Bookings::find($b['id']);
+    });
+    // Seat a booking: starts the timer on its table and links the session.
+    $r->add('POST', '/bookings/{id}/start', function ($p) use ($findSession) {
+        $u = Auth::user();
+        $b = Bookings::find((int) $p['id']);
+        if (!in_array($b['status'], Bookings::ACTIVE, true)) throw new HttpError(409, 'Only pending or confirmed bookings can be started');
+        $t = Db::one('SELECT * FROM pool_tables WHERE id = ? AND active = 1', [$b['table_id']]);
+        if (!$t) throw new HttpError(404, 'Table not found');
+        if (Db::scalar('SELECT id FROM sessions WHERE table_id = ? AND end_ts IS NULL', [$t['id']])) throw new HttpError(409, "{$t['name']} is still running — stop it first");
+        $sid = Db::insert('INSERT INTO sessions (table_id, member_id, customer_name, players, start_ts, rate_per_hour, discount, notes, started_by) VALUES (?,?,?,?,?,?,0,?,?)',
+            [$t['id'], null, $b['customer_name'], $b['players'], time(), $t['rate_per_hour'], "Booking {$b['code']}", $u['id']]);
+        Db::run("UPDATE bookings SET status = 'seated', session_id = ?, updated_by = ? WHERE id = ?", [$sid, $u['id'], $b['id']]);
+        return ['booking' => Bookings::find($b['id']), 'session' => $findSession($sid)];
     });
 
     // ---------- Admin: dashboard ----------

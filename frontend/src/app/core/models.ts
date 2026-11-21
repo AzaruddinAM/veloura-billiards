@@ -21,6 +21,14 @@ export interface Settings {
   min_minutes: number;
   address: string;
   phone: string;
+  booking_enabled: boolean;
+  booking_auto_confirm: boolean;
+  open_time: string;
+  close_time: string;
+  slot_minutes: number;
+  booking_max_days: number;
+  booking_min_notice: number;
+  timezone?: string;
 }
 
 export interface Session {
@@ -54,6 +62,7 @@ export interface PoolTable {
 
 export interface FloorTable extends PoolTable {
   session: Session | null;
+  next_booking: Booking | null;
 }
 
 export interface Floor {
@@ -61,6 +70,7 @@ export interface Floor {
   settings: Settings;
   tables: FloorTable[];
   today: { sessions: number; revenue: number; minutes: number };
+  pending_bookings: number;
 }
 
 export interface Member {
@@ -134,4 +144,61 @@ export interface Overview {
   members: number;
   outstanding_total: number;
   open_months: string[];
+}
+
+export type BookingStatus = 'pending' | 'confirmed' | 'seated' | 'completed' | 'cancelled' | 'no_show';
+
+export interface Booking {
+  id: number;
+  code: string;
+  table_id: number;
+  table_name?: string;
+  table_type?: TableType;
+  customer_name: string;
+  phone: string;
+  email: string | null;
+  players: number;
+  start_ts: number;
+  end_ts: number;
+  duration_minutes: number;
+  status: BookingStatus;
+  notes: string | null;
+  source: 'online' | 'staff';
+  session_id: number | null;
+  created_at: number;
+  rate_per_hour?: number;
+  estimate?: number;
+}
+
+/** What a customer sees about their own booking. */
+export type PublicBooking = Pick<Booking, 'code' | 'table_name' | 'table_type' | 'customer_name' | 'players' | 'start_ts' | 'end_ts' | 'duration_minutes' | 'status' | 'estimate'>;
+
+export interface PublicSettings {
+  business_name: string;
+  currency: string;
+  address: string;
+  phone: string;
+  booking_enabled: boolean;
+  open_time: string;
+  close_time: string;
+  slot_minutes: number;
+  booking_max_days: number;
+  booking_min_notice: number;
+  timezone: string;
+}
+
+export interface PublicInfo {
+  settings: PublicSettings;
+  server_time: number;
+  tables: { id: number; name: string; type: TableType; rate_per_hour: number }[];
+}
+
+export interface Availability {
+  date: string;
+  open_ts: number;
+  close_ts: number;
+  earliest_ts: number;
+  slot_minutes: number;
+  durations: number[];
+  tables: { id: number; name: string; type: TableType; rate_per_hour: number; busy: [number, number][] }[];
 }

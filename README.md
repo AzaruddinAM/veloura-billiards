@@ -23,10 +23,12 @@ Change these passwords right away in **Admin → Staff**.
 | Page | Who | What |
 |---|---|---|
 | **Floor** (home) | all | 3D carousel of tables (drag, arrow keys, ball dots, floor map). Start a timer with a walk-in name or member; live timer and running amount; Stop & bill with discount, payment method (Cash / UPI / Card / On account) and a printable receipt. |
+| **Book online** (`/book`, public) | customers | Pick a game (pool, snooker, carom, PS5, racing sim), day, duration and a free start time; get a booking code. `/book/manage` lets them view or cancel with code + phone. No payment online. |
+| **Bookings** | all | Day timeline per table (click an empty spot to add a phone booking), list view and upcoming view. Confirm, seat (starts the timer), mark no-show or cancel. A badge shows requests waiting for confirmation. |
 | **Sessions** | all | Billed history per month, table or player, with totals. Admins can delete wrong entries. |
 | **Accounts** | all | Members (regulars). Play "on account", see the ledger, record payments, see balances due. |
 | **Month End** | admin | Revenue, expenses, net profit, cash collected, daily chart, payment-method split, per-table figures, member dues. Add expenses. **Close month** locks that month's sessions, payments and expenses (Reopen undoes it). Export CSV / print. |
-| **Admin** | admin | 6-month trend, months waiting to close, tables & hourly rates, staff logins & roles, billing rules (round up to N minutes, minimum charge), currency and business name. |
+| **Admin** | admin | 6-month trend, months waiting to close, tables & hourly rates, staff logins & roles, billing rules (round up to N minutes, minimum charge), currency and business name, online booking rules (on/off, auto-confirm, opening hours, slot length, days ahead, minimum notice). |
 
 ### Billing rule
 `billed minutes = max(ceil(played minutes / round_to) × round_to, minimum minutes)`,

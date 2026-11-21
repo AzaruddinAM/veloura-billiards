@@ -72,10 +72,47 @@ REP=$(curl -s "${H[@]}" "$API/reports/month")
 [ "$(status -X POST "${H[@]}" "$API/reports/month/close" -d "{\"period\":\"$(date +%Y-%m)\"}")" = 409 ] || fail "current month must not be closable"
 pass "month end: revenue, expenses, net, and close-lock on an unfinished month"
 
+# --- online booking (public) + staff handling
+TZ_VENUE=$(curl -s "$API/public/info" | json settings.timezone)
+TOMORROW=$(php -r 'date_default_timezone_set($argv[1]); echo date("Y-m-d", time() + 86400);' "$TZ_VENUE")
+J=(-H 'Content-Type: application/json')
+BK=$(curl -s -X POST "${J[@]}" "$API/public/bookings" -d "{\"table_id\":2,\"date\":\"$TOMORROW\",\"time\":\"18:00\",\"duration_minutes\":60,\"customer_name\":\"CI Guest\",\"phone\":\"+91 90000 11111\",\"players\":3}")
+CODE=$(echo "$BK" | json code)
+[ -n "$CODE" ] && [ "$(echo "$BK" | json status)" = pending ] || fail "public booking should be created as pending: $BK"
+[ "$(status -X POST "${J[@]}" "$API/public/bookings" -d "{\"table_id\":2,\"date\":\"$TOMORROW\",\"time\":\"18:30\",\"duration_minutes\":60,\"customer_name\":\"Clash\",\"phone\":\"9000022222\"}")" = 409 ] || fail "overlapping booking must be refused"
+[ "$(status "$API/public/bookings/$CODE?phone=1234567")" = 404 ] || fail "lookup with the wrong phone must fail"
+[ "$(curl -s "$API/public/bookings/$CODE?phone=919000011111" | json customer_name)" = "CI Guest" ] || fail "lookup with code + phone"
+BID=$(curl -s "${H[@]}" "$API/bookings?date=$TOMORROW" | php -r '$d=json_decode(stream_get_contents(STDIN),true); foreach($d as $b) if($b["code"]===$argv[1]) echo $b["id"];' "$CODE")
+[ -n "$BID" ] || fail "staff should see the online booking"
+[ "$(curl -s -X PUT "${H[@]}" "$API/bookings/$BID/status" -d '{"status":"confirmed"}' | json status)" = confirmed ] || fail "staff confirm"
+BUSY=$(curl -s "$API/public/availability?date=$TOMORROW" | php -r '$d=json_decode(stream_get_contents(STDIN),true); foreach($d["tables"] as $t) if($t["id"]==2) echo count($t["busy"]);')
+[ "$BUSY" -ge 1 ] || fail "booked slot must show as busy"
+[ "$(curl -s -X POST "${J[@]}" "$API/public/bookings/$CODE/cancel" -d '{"phone":"9000011111"}' | json status)" = cancelled ] || fail "customer cancel"
+[ "$(status -X POST "${J[@]}" "$API/public/bookings" -d "{\"table_id\":2,\"date\":\"$TOMORROW\",\"time\":\"18:00\",\"duration_minutes\":60,\"customer_name\":\"Rebook\",\"phone\":\"9000033333\"}")" = 200 ] || fail "cancelled slot should be bookable again"
+SB=$(curl -s -X POST "${H[@]}" "$API/bookings" -d "{\"table_id\":3,\"date\":\"$TOMORROW\",\"time\":\"12:00\",\"duration_minutes\":60,\"customer_name\":\"Desk Guest\",\"phone\":\"9000044444\"}")
+SBID=$(echo "$SB" | json id); [ "$(echo "$SB" | json status)" = confirmed ] || fail "staff bookings are confirmed: $SB"
+SEAT=$(curl -s -X POST "${H[@]}" "$API/bookings/$SBID/start")
+[ "$(echo "$SEAT" | json booking.status)" = seated ] && [ -n "$(echo "$SEAT" | json session.id)" ] || fail "seating a booking starts a session: $SEAT"
+# Floor shows a table's next booking: open round the clock, book 2h from now, check, restore hours.
+curl -s -o /dev/null -X PUT "${H[@]}" "$API/settings" -d '{"open_time":"00:00","close_time":"00:00"}'
+read -r SOON_DATE SOON_TIME < <(php -r 'date_default_timezone_set($argv[1]); $t = (int) (ceil((time() + 7200) / 1800) * 1800); echo date("Y-m-d", $t), " ", date("H:i", $t), "\n";' "$TZ_VENUE")
+NB=$(curl -s -X POST "${H[@]}" "$API/bookings" -d "{\"table_id\":5,\"date\":\"$SOON_DATE\",\"time\":\"$SOON_TIME\",\"duration_minutes\":60,\"customer_name\":\"Soon Guest\",\"phone\":\"9000077777\"}")
+FLOOR_NB=$(curl -s "${H[@]}" "$API/floor" | php -r '$d=json_decode(stream_get_contents(STDIN),true); if(!is_array($d)) { echo "NOT-JSON"; exit; } foreach($d["tables"] as $t) if($t["id"]==5) echo $t["next_booking"]["code"] ?? "none";')
+curl -s -o /dev/null -X PUT "${H[@]}" "$API/settings" -d '{"open_time":"10:00","close_time":"23:00"}'
+[ "$FLOOR_NB" = "$(echo "$NB" | json code)" ] || fail "floor should show the table's next booking (got '$FLOOR_NB', booking: $NB)"
+pass "booking: public create, clash refused, code+phone lookup, confirm, cancel/rebook, staff booking seated"
+
 # --- roles
 STAFF=$(curl -s -X POST "$API/auth/login" -H 'Content-Type: application/json' -d '{"username":"staff","password":"staff123"}' | json token)
 [ "$(status -H "Authorization: Bearer $STAFF" "$API/reports/month")" = 403 ] || fail "staff must not see month-end"
 [ "$(status -H "Authorization: Bearer $STAFF" "$API/floor")" = 200 ] || fail "staff must see the floor"
 pass "roles: staff blocked from admin reports, allowed on the floor"
+
+# --- no PHP warnings/notices/errors anywhere during the run
+if grep -qE "PHP (Warning|Notice|Deprecated|Fatal|Parse)" /tmp/vb-smoke-server.log; then
+  grep -E "PHP (Warning|Notice|Deprecated|Fatal|Parse)" /tmp/vb-smoke-server.log | sort -u | head -10
+  fail "PHP reported warnings or errors during the run"
+fi
+pass "no PHP warnings or errors logged"
 
 echo "All smoke tests passed."

@@ -1,0 +1,182 @@
+<div class="page">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Reservations</div>
+      <h1>Bookings</h1>
+      <p>Online requests and phone bookings. Confirm them, then seat guests to start the timer.</p>
+    </div>
+    <div class="row head-actions">
+      <div class="seg">
+        <button [class.on]="view() === 'day'" (click)="setView('day')">Day</button>
+        <button [class.on]="view() === 'upcoming'" (click)="setView('upcoming')">Upcoming</button>
+      </div>
+      <button class="btn btn-gold" (click)="newBooking()">+ New booking</button>
+    </div>
+  </div>
+
+  @if (view() === 'day') {
+    <div class="daybar">
+      <button class="btn icon-btn" (click)="shift(-1)" aria-label="Previous day">‹</button>
+      <div class="daytitle"><strong>{{ dayTitle() }}</strong>
+        @if (avail(); as a) { <span class="muted">Open {{ t(a.open_ts) }} – {{ t(a.close_ts) }}</span> }
+      </div>
+      <button class="btn icon-btn" (click)="shift(1)" aria-label="Next day">›</button>
+      <button class="btn btn-sm btn-ghost" (click)="today()">Today</button>
+      <span class="spacer"></span>
+      <label class="checkbox"><input type="checkbox" [checked]="hideClosed()" (change)="hideClosed.set(!hideClosed())" /> Hide cancelled</label>
+    </div>
+
+    <div class="grid grid-4 stats">
+      <div class="card stat" style="--ball:#f2c230"><div class="label">Bookings</div><div class="value">{{ stats().total }}</div></div>
+      <div class="card stat" style="--ball:#e2742a"><div class="label">To confirm</div><div class="value" [class.gold]="stats().pending">{{ stats().pending }}</div></div>
+      <div class="card stat" style="--ball:#1c8a4c"><div class="label">Confirmed</div><div class="value">{{ stats().confirmed }}</div></div>
+      <div class="card stat" style="--ball:#2f6fd6"><div class="label">Seated</div><div class="value">{{ stats().seated }}</div></div>
+    </div>
+
+    <!-- Timeline (desktop) -->
+    @if (avail()) {
+      <div class="card timeline">
+        <div class="tl-head">
+          <div class="tl-name"></div>
+          <div class="tl-track">
+            @for (h of hours(); track h.ts) { <span class="tick" [style.left.%]="h.left">{{ h.label }}</span> }
+          </div>
+        </div>
+        @for (l of lanes(); track l.id) {
+          <div class="tl-row">
+            <div class="tl-name"><strong>{{ l.name }}</strong><small>{{ money(l.rate_per_hour) }}/hr</small></div>
+            <div class="tl-track lane" (click)="laneClick($event, l.id)" title="Click an empty spot to add a booking">
+              @for (h of hours(); track h.ts) { <span class="grid-line" [style.left.%]="h.left"></span> }
+              @if (nowLeft() !== null) { <span class="now" [style.left.%]="nowLeft()"></span> }
+              @for (x of l.blocks; track x.b.id) {
+                <button class="block" [class]="'block s-' + x.b.status" [style.left.%]="x.left" [style.width.%]="x.width" (click)="selected.set(x.b)"
+                        [title]="x.b.customer_name + ' · ' + t(x.b.start_ts) + '–' + t(x.b.end_ts)">
+                  <strong>{{ x.b.customer_name }}</strong><small>{{ t(x.b.start_ts) }}</small>
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- List (all sizes) -->
+    <div class="card list">
+      @for (b of visible(); track b.id) {
+        <div class="item" [class.past]="isPast(b)" [class.sel]="selected()?.id === b.id">
+          <div class="when"><strong class="mono">{{ t(b.start_ts) }}</strong><small>{{ durationLabel(b.duration_minutes) }}</small></div>
+          <div class="who">
+            <strong>{{ b.customer_name }}</strong>
+            <span class="muted">{{ b.table_name }} · {{ b.players }} players · <a [href]="'tel:' + b.phone">{{ b.phone }}</a></span>
+            @if (b.notes) { <span class="note">“{{ b.notes }}”</span> }
+          </div>
+          <span class="chip" [class]="'chip st-' + b.status">{{ statusLabel(b.status) }}</span>
+          <div class="acts">
+            @if (canAct(b)) {
+              @if (b.status === 'pending') { <button class="btn btn-sm btn-felt" (click)="setStatus(b, 'confirmed')" [disabled]="busyId() === b.id">Confirm</button> }
+              <button class="btn btn-sm btn-gold" (click)="seat(b)" [disabled]="busyId() === b.id">▶ Seat</button>
+              <button class="btn btn-sm btn-ghost" (click)="setStatus(b, 'no_show')" [disabled]="busyId() === b.id">No-show</button>
+              <button class="btn btn-sm btn-ghost" (click)="setStatus(b, 'cancelled')" [disabled]="busyId() === b.id">Cancel</button>
+            } @else if (b.status === 'cancelled' || b.status === 'no_show') {
+              @if (!isPast(b)) { <button class="btn btn-sm btn-ghost" (click)="setStatus(b, 'confirmed')" [disabled]="busyId() === b.id">Restore</button> }
+            }
+          </div>
+          <span class="code mono muted">{{ b.code }}{{ b.source === 'online' ? ' · online' : '' }}</span>
+        </div>
+      } @empty {
+        <div class="empty"><div class="ball"></div>No bookings for this day. Share <strong class="gold">/book</strong> with your customers.</div>
+      }
+    </div>
+  } @else {
+    <!-- Upcoming -->
+    @for (g of upcomingByDay(); track g.label) {
+      <h3 class="group">{{ g.label }}</h3>
+      <div class="card list">
+        @for (b of g.items; track b.id) {
+          <div class="item">
+            <div class="when"><strong class="mono">{{ t(b.start_ts) }}</strong><small>{{ durationLabel(b.duration_minutes) }}</small></div>
+            <div class="who">
+              <strong>{{ b.customer_name }}</strong>
+              <span class="muted">{{ b.table_name }} · {{ b.players }} players · <a [href]="'tel:' + b.phone">{{ b.phone }}</a></span>
+            </div>
+            <span class="chip" [class]="'chip st-' + b.status">{{ statusLabel(b.status) }}</span>
+            <div class="acts">
+              @if (b.status === 'pending') { <button class="btn btn-sm btn-felt" (click)="setStatus(b, 'confirmed')" [disabled]="busyId() === b.id">Confirm</button> }
+              <button class="btn btn-sm btn-ghost" (click)="setStatus(b, 'cancelled')" [disabled]="busyId() === b.id">Cancel</button>
+            </div>
+            <span class="code mono muted">{{ b.code }}</span>
+          </div>
+        }
+      </div>
+    } @empty {
+      <div class="card empty"><div class="ball"></div>No upcoming bookings.</div>
+    }
+  }
+</div>
+
+<!-- Selected booking (from timeline) -->
+@if (selected(); as b) {
+  <div class="backdrop" (click)="selected.set(null)">
+    <div class="modal card" (click)="$event.stopPropagation()" role="dialog" aria-modal="true">
+      <div class="eyebrow">Booking {{ b.code }} · {{ b.source }}</div>
+      <h2>{{ b.customer_name }}</h2>
+      <p class="muted">{{ b.table_name }} · {{ t(b.start_ts) }} – {{ t(b.end_ts) }} · {{ b.players }} players</p>
+      <div class="bill-line"><span>Phone</span><a [href]="'tel:' + b.phone">{{ b.phone }}</a></div>
+      @if (b.email) { <div class="bill-line"><span>Email</span><span>{{ b.email }}</span></div> }
+      <div class="bill-line"><span>Status</span><span class="chip" [class]="'chip st-' + b.status">{{ statusLabel(b.status) }}</span></div>
+      <div class="bill-line"><span>Estimate</span><span class="mono">{{ money(b.estimate) }}</span></div>
+      @if (b.notes) { <p class="note">“{{ b.notes }}”</p> }
+      <div class="modal-actions">
+        @if (canAct(b)) {
+          <button class="btn btn-ghost" (click)="setStatus(b, 'cancelled')">Cancel booking</button>
+          <button class="btn btn-ghost" (click)="setStatus(b, 'no_show')">No-show</button>
+          @if (b.status === 'pending') { <button class="btn btn-felt" (click)="setStatus(b, 'confirmed')">Confirm</button> }
+          <button class="btn btn-gold" (click)="seat(b)" [disabled]="busyId() === b.id">▶ Seat &amp; start timer</button>
+        } @else {
+          <button class="btn btn-gold" (click)="selected.set(null)">Close</button>
+        }
+      </div>
+    </div>
+  </div>
+}
+
+<!-- New booking (staff) -->
+@if (draft(); as d) {
+  <div class="backdrop" (click)="draft.set(null)">
+    <form class="modal card" (click)="$event.stopPropagation()" (ngSubmit)="saveDraft()" #nf="ngForm">
+      <div class="eyebrow">Phone / walk-in booking</div>
+      <h2>New booking</h2>
+      <div class="form-grid" style="margin-top: 14px">
+        <label class="field">Table
+          <select name="table" [ngModel]="d.table_id" (ngModelChange)="patchDraft({ table_id: $event })" required>
+            @for (t of draftAvail()?.tables ?? avail()?.tables ?? []; track t.id) { <option [ngValue]="t.id">{{ t.name }}</option> }
+          </select>
+        </label>
+        <label class="field">Day
+          <select name="date" [ngModel]="d.date" (ngModelChange)="patchDraft({ date: $event })">
+            @for (x of days(); track x.ymd) { <option [value]="x.ymd">{{ x.ymd === days()[0].ymd ? 'Today' : '' }} {{ x.ymd }}</option> }
+          </select>
+        </label>
+        <label class="field">Duration
+          <select name="dur" [ngModel]="d.duration_minutes" (ngModelChange)="patchDraft({ duration_minutes: +$event })">
+            @for (m of durations; track m) { <option [ngValue]="m">{{ durationLabel(m) }}</option> }
+          </select>
+        </label>
+        <label class="field">Start time
+          <select name="time" [ngModel]="d.time" (ngModelChange)="patchDraft({ time: $event })" required>
+            <option value="" disabled>Choose…</option>
+            @for (o of draftTimes(); track o.value) { <option [value]="o.value" [disabled]="!o.free">{{ o.label }}{{ o.free ? '' : ' — booked' }}</option> }
+          </select>
+        </label>
+        <label class="field">Name<input name="name" [ngModel]="d.customer_name" (ngModelChange)="patchDraft({ customer_name: $event })" required minlength="2" /></label>
+        <label class="field">Phone<input name="phone" type="tel" [ngModel]="d.phone" (ngModelChange)="patchDraft({ phone: $event })" required /></label>
+        <label class="field">Players<input name="players" type="number" min="1" max="12" [ngModel]="d.players" (ngModelChange)="patchDraft({ players: +$event })" /></label>
+      </div>
+      <label class="field" style="margin-top: 12px">Notes<input name="notes" [ngModel]="d.notes" (ngModelChange)="patchDraft({ notes: $event })" /></label>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" (click)="draft.set(null)">Cancel</button>
+        <button class="btn btn-gold" type="submit" [disabled]="nf.invalid || !d.time">Save booking</button>
+      </div>
+    </form>
+  </div>
+}

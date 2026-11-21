@@ -1,0 +1,61 @@
+.head-actions { gap: 10px; }
+.daybar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.daytitle { display: grid; line-height: 1.25; min-width: 170px; strong { font-family: var(--display); font-size: 1.4rem; color: var(--ivory); } span { font-size: .8rem; } }
+.stats { margin-bottom: 16px; }
+
+/* ---------- timeline ---------- */
+.timeline { padding: 14px 16px 6px; margin-bottom: 16px; overflow-x: auto; }
+.tl-head, .tl-row { display: grid; grid-template-columns: 150px minmax(640px, 1fr); align-items: center; }
+.tl-head { height: 26px; }
+.tl-row { height: 52px; border-top: 1px solid var(--line-2); }
+.tl-name { display: grid; line-height: 1.2; padding-right: 10px; strong { font-size: .88rem; } small { color: var(--muted); font-size: .7rem; } }
+.tl-track { position: relative; height: 100%; }
+.tick { position: absolute; top: 4px; transform: translateX(-50%); font-size: .66rem; color: var(--muted); white-space: nowrap; }
+.lane { cursor: copy; }
+.grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(244, 236, 219, .05); }
+.now { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--red); box-shadow: 0 0 8px var(--red); z-index: 2; }
+.block {
+  position: absolute; top: 7px; bottom: 7px; z-index: 1; display: grid; align-content: center; text-align: left;
+  padding: 0 8px; border-radius: 8px; border: 1px solid transparent; overflow: hidden; cursor: pointer;
+  font: 600 .74rem var(--sans); color: var(--ivory); line-height: 1.15;
+  strong, small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } small { opacity: .75; font-size: .66rem; }
+  &.s-pending { background: repeating-linear-gradient(135deg, rgba(240,181,69,.28) 0 6px, rgba(240,181,69,.16) 6px 12px); border-color: rgba(240,181,69,.6); }
+  &.s-confirmed { background: linear-gradient(180deg, #1aa166, var(--felt)); }
+  &.s-seated, &.s-completed { background: linear-gradient(180deg, #3c7be0, #1d4f9a); }
+  &.s-cancelled, &.s-no_show { background: rgba(255,255,255,.05); border-color: var(--line-2); color: var(--muted); text-decoration: line-through; }
+  &:hover { filter: brightness(1.15); }
+}
+
+/* ---------- list ---------- */
+.list { padding: 6px 16px; }
+.item {
+  display: grid; grid-template-columns: 84px minmax(0, 1fr) auto auto; grid-template-areas: "when who chip acts" "when who code acts";
+  gap: 2px 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line-2);
+  &:last-child { border-bottom: 0; }
+  &.past { opacity: .6; }
+  &.sel { background: rgba(212,166,74,.05); }
+}
+.when { grid-area: when; display: grid; strong { font-size: 1rem; color: var(--ivory); } small { color: var(--muted); font-size: .74rem; } }
+.who { grid-area: who; display: grid; gap: 2px; min-width: 0; strong { font-size: .98rem; } span { font-size: .82rem; } a { color: var(--gold-2); text-decoration: none; } }
+.note { font-size: .8rem; color: var(--warn); font-style: italic; }
+.item > .chip { grid-area: chip; justify-self: end; }
+.code { grid-area: code; justify-self: end; font-size: .7rem; }
+.acts { grid-area: acts; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 330px; }
+.group { margin: 18px 0 8px; font-size: 1.15rem; }
+
+.chip.st-pending { background: rgba(240,181,69,.14); color: var(--warn); }
+.chip.st-confirmed { background: rgba(63,209,139,.12); color: var(--ok); }
+.chip.st-seated, .chip.st-completed { background: rgba(60,123,224,.16); color: #8cb4ff; }
+.chip.st-cancelled, .chip.st-no_show { background: rgba(224,83,61,.12); color: #ff8c77; }
+
+@media (max-width: 900px) {
+  .timeline { display: none; } // the list is the phone/tablet view
+  .item { grid-template-columns: 70px minmax(0, 1fr) auto; grid-template-areas: "when who chip" "when who code" "acts acts acts"; }
+  .acts { max-width: none; justify-content: flex-start; padding-top: 8px; }
+}
+@media (max-width: 640px) {
+  .head-actions { width: 100%; .seg { flex: 1; } .btn-gold { flex: 1; } }
+  .daybar .spacer { display: none; }
+  .daybar .checkbox { width: 100%; }
+  .acts .btn { flex: 1 1 auto; }
+}

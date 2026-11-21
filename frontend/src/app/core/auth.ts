@@ -12,6 +12,8 @@ export class Auth {
   readonly user = signal<User | null>(null);
   readonly settings = signal<Settings>({
     business_name: 'Veloura Billiards', currency: '₹', round_to_minutes: 1, min_minutes: 0, address: '', phone: '',
+    booking_enabled: true, booking_auto_confirm: false, open_time: '10:00', close_time: '23:00',
+    slot_minutes: 30, booking_max_days: 14, booking_min_notice: 30,
   });
   readonly isAdmin = computed(() => this.user()?.role === 'admin');
   private restored?: Promise<boolean>;

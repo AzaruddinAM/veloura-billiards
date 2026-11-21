@@ -31,6 +31,7 @@ export class AdminPage implements OnInit {
   protected editTable = signal<Partial<PoolTable> | null>(null);
   protected editUser = signal<UserForm | null>(null);
   protected settings: Settings = { ...this.auth.settings() };
+  protected readonly bookingUrl = `${location.origin}/book`;
 
   protected trendLabels = computed(() => (this.overview()?.trend ?? []).map((t) => periodLabel(t.period).slice(0, 3)));
   protected trendSeries = computed(() => {

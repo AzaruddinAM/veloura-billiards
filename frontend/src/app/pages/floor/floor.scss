@@ -246,3 +246,15 @@
   .map-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; }
   .mini { padding: 10px 12px; }
 }
+
+// Upcoming booking on the control desk
+.desk-booking {
+  grid-column: 2 / -1; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  padding: 12px 14px; border-radius: 12px; background: rgba(212, 166, 74, .08); border: 1px dashed var(--gold);
+  > div { display: grid; line-height: 1.3; }
+  .k { font-size: .66rem; letter-spacing: .14em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+  strong { font-size: 1.05rem; }
+  a { color: var(--gold-2); }
+}
+@media (max-width: 960px) { .desk-booking { grid-column: auto; } }
+@media (max-width: 640px) { .desk-booking .btn { width: 100%; } }

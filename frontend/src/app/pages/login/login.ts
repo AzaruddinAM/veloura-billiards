@@ -1,12 +1,12 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { Auth } from '../../core/auth';
 import { Logo } from '../../shared/logo';
 
 @Component({
   selector: 'app-login',
-  imports: [FormsModule, Logo],
+  imports: [FormsModule, Logo, RouterLink],
   template: `
     <div class="scene">
       <div class="table3d" aria-hidden="true">
@@ -24,7 +24,7 @@ import { Logo } from '../../shared/logo';
         <label class="field">Username <input name="u" [(ngModel)]="username" autocomplete="username" required /></label>
         <label class="field">Password <input name="p" type="password" [(ngModel)]="password" autocomplete="current-password" required /></label>
         <button class="btn btn-gold btn-lg" type="submit" [disabled]="busy()">{{ busy() ? 'Racking up…' : 'Break & enter' }}</button>
-        <p class="hint muted">First run: <span class="mono">admin / admin123</span> or <span class="mono">staff / staff123</span>. Change these in Admin → Staff.</p>
+        <a routerLink="/book" class="btn btn-ghost book-link">Not staff? Book a table online →</a>
       </form>
     </div>
   `,

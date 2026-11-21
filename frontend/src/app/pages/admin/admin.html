@@ -127,6 +127,26 @@
         Example: rate {{ 200 | money }}/hr, played 37 min →
         billed {{ exampleBilled() }} min.
       </p>
+      <div class="card-title" style="margin-top: 22px"><h3>Online booking</h3>
+        <a class="btn btn-sm btn-ghost" [href]="bookingUrl" target="_blank" rel="noopener">Open booking page ↗</a>
+      </div>
+      <p class="muted small" style="margin-top: 0">Share this link with customers: <span class="mono gold">{{ bookingUrl }}</span></p>
+      <div class="form-grid">
+        <label class="checkbox"><input type="checkbox" name="be" [(ngModel)]="settings.booking_enabled" /> Accept online bookings</label>
+        <label class="checkbox"><input type="checkbox" name="bac" [(ngModel)]="settings.booking_auto_confirm" /> Confirm online bookings automatically</label>
+      </div>
+      <div class="form-grid" style="margin-top: 12px">
+        <label class="field">Opens at<input name="ot" type="time" [(ngModel)]="settings.open_time" required /></label>
+        <label class="field">Closes at<input name="ct" type="time" [(ngModel)]="settings.close_time" required /></label>
+        <label class="field">Slot length
+          <select name="sm" [(ngModel)]="settings.slot_minutes">
+            @for (n of [15, 30, 60]; track n) { <option [ngValue]="n">{{ n }} minutes</option> }
+          </select>
+        </label>
+        <label class="field">Book up to (days ahead)<input name="bmd" type="number" min="1" max="90" [(ngModel)]="settings.booking_max_days" /></label>
+        <label class="field">Minimum notice (minutes)<input name="bmn" type="number" min="0" max="1440" [(ngModel)]="settings.booking_min_notice" /></label>
+      </div>
+      <p class="muted small">A closing time earlier than the opening time means you close after midnight (e.g. 14:00 – 02:00).</p>
       <div class="modal-actions"><button class="btn btn-gold" type="submit">Save settings</button></div>
     </form>
   }

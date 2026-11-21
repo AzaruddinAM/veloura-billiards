@@ -1,9 +1,10 @@
-import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, input, OnDestroy, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Api } from '../../core/api';
 import { Auth } from '../../core/auth';
 import { Clock, estimateBill, hms } from '../../core/clock';
-import { Floor, FloorTable, Member, PaymentMethod, Session, TYPE_LABELS } from '../../core/models';
+import { Booking, Floor, FloorTable, Member, PaymentMethod, Session, TYPE_LABELS } from '../../core/models';
+import { timeLabel } from '../../core/tz';
 import { Toast } from '../../core/toast';
 import { MinutesPipe, MoneyPipe, TimestampPipe } from '../../shared/pipes';
 import { Ball, POCKETS, rackFor, scatterFor } from './balls';
@@ -44,6 +45,8 @@ export class FloorPage implements OnInit, OnDestroy {
   protected readonly dragging = signal(false);
   protected readonly stop = signal<StopState | null>(null);
   protected readonly starting = signal(false);
+  /** ?table=<id> — bring that table to the front (e.g. after seating a booking). */
+  readonly table = input<string>();
 
   // start form
   protected startName = '';
@@ -75,8 +78,10 @@ export class FloorPage implements OnInit, OnDestroy {
   async ngOnInit() {
     await this.load();
     this.loaded.set(true);
+    const wanted = this.tables().findIndex((t) => String(t.id) === this.table());
     const firstRunning = this.tables().findIndex((t) => t.session);
-    if (firstRunning > 0) this.goTo(firstRunning, true);
+    if (wanted >= 0) this.goTo(wanted, true);
+    else if (firstRunning > 0) this.goTo(firstRunning, true);
     this.api.get<Member[]>('/members').then((m) => this.members.set(m)).catch(() => {});
     this.poll = setInterval(() => this.load().catch(() => {}), 15000);
   }
@@ -231,6 +236,27 @@ export class FloorPage implements OnInit, OnDestroy {
     this.startName = '';
     this.startMember = null;
     this.startPlayers = 2;
+  }
+
+  /** Upcoming booking worth showing on the floor: within the next 3 hours. */
+  soonBooking(t: FloorTable): Booking | null {
+    const b = t.next_booking;
+    return b && b.start_ts - this.clock.now() < 3 * 3600 ? b : null;
+  }
+
+  bookingTime(b: Booking) {
+    return timeLabel(b.start_ts, this.auth.settings().timezone ?? 'Asia/Kolkata');
+  }
+
+  async seatBooking(t: FloorTable, b: Booking) {
+    this.starting.set(true);
+    try {
+      const r = await this.api.post<{ session: Session }>(`/bookings/${b.id}/start`);
+      this.tables.update((list) => list.map((x) => (x.id === t.id ? { ...x, session: r.session, next_booking: null } : x)));
+      this.toast.ok(`${b.customer_name} seated on ${t.name} — timer running`);
+    } catch { /* toast shown */ } finally {
+      this.starting.set(false);
+    }
   }
 
   async start(t: FloorTable) {

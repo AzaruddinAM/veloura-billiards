@@ -1,0 +1,144 @@
+<div class="book">
+  <header class="bar">
+    <a routerLink="/book" class="brand" aria-label="Veloura Billiards booking"><vb-logo [size]="40" /></a>
+    <a routerLink="/book/manage" class="btn btn-ghost btn-sm">Manage booking</a>
+  </header>
+
+  @if (info(); as i) {
+    @if (done(); as b) {
+      <!-- ===== Confirmation ===== -->
+      <section class="confirm card">
+        <div class="seal" [class.ok]="b.status === 'confirmed'"><span>{{ b.status === 'confirmed' ? '✓' : '8' }}</span></div>
+        <div class="eyebrow">{{ b.status === 'confirmed' ? 'Booking confirmed' : 'Request received' }}</div>
+        <h1>See you on the {{ b.table_type === 'ps5' || b.table_type === 'simulator' ? 'rig' : 'baize' }}, {{ b.customer_name.split(' ')[0] }}.</h1>
+        <p class="muted">
+          @if (b.status === 'confirmed') { Your slot is held. }
+          @else { We'll confirm by phone shortly — your slot is held in the meantime. }
+          Please arrive 5 minutes early.
+        </p>
+        <div class="code-box">
+          <span class="k">Booking code</span>
+          <strong class="mono">{{ b.code }}</strong>
+          <span class="muted small">Keep this with your phone number to view or cancel.</span>
+        </div>
+        <div class="ticket">
+          <div><span class="k">Where</span><strong>{{ b.table_name }}</strong></div>
+          <div><span class="k">When</span><strong>{{ fmtDay(b.start_ts) }}, {{ fmtTime(b.start_ts) }} – {{ fmtTime(b.end_ts) }}</strong></div>
+          <div><span class="k">Players</span><strong>{{ b.players }}</strong></div>
+          <div><span class="k">Estimate</span><strong>{{ money(b.estimate ?? 0) }}</strong></div>
+        </div>
+        <p class="muted small">You pay at the venue for the actual time played.</p>
+        <div class="row center">
+          <a class="btn btn-ghost" routerLink="/book/manage" [queryParams]="{ code: b.code }">Manage booking</a>
+          <button class="btn btn-gold" (click)="bookAnother()">Book another</button>
+        </div>
+      </section>
+    } @else if (!i.settings.booking_enabled) {
+      <section class="closed card">
+        <h1>Online booking is paused</h1>
+        <p class="muted">Please call us{{ i.settings.phone ? ' on ' + i.settings.phone : '' }} to reserve a table.</p>
+      </section>
+    } @else {
+      <section class="hero">
+        <div class="eyebrow">Reserve online · {{ i.settings.business_name }}</div>
+        <h1>Book your <em>table</em>.</h1>
+        <p class="muted">Open {{ i.settings.open_time }}–{{ i.settings.close_time }} daily. Pick a game, a time, and you're on the cloth. Pay at the venue.</p>
+      </section>
+
+      <!-- Step 1: game -->
+      <section class="step">
+        <h2><span class="n">1</span> Choose your game</h2>
+        <div class="games">
+          @for (g of games(); track g.type) {
+            <button class="game" [class.on]="type() === g.type" (click)="pickType(g.type)" [style.--c]="g.color" [attr.aria-pressed]="type() === g.type">
+              <span class="gball" [class]="'gball t-' + g.type"></span>
+              <span class="gtext">
+                <strong>{{ g.name }}</strong>
+                <small>{{ g.blurb }}</small>
+              </span>
+              <span class="gprice">{{ money(g.from) }}<small>/hr</small></span>
+            </button>
+          }
+        </div>
+      </section>
+
+      @if (type()) {
+        <!-- Step 2: day + duration -->
+        <section class="step">
+          <h2><span class="n">2</span> Pick a day &amp; how long</h2>
+          <div class="days" role="listbox" aria-label="Day">
+            @for (d of days(); track d.ymd) {
+              <button class="day" role="option" [class.on]="date() === d.ymd" [attr.aria-selected]="date() === d.ymd" (click)="pickDate(d.ymd)">
+                <strong>{{ d.label.split(',')[0] }}</strong><small>{{ d.sub }}</small>
+              </button>
+            }
+          </div>
+          <div class="seg dur" role="radiogroup" aria-label="Duration">
+            @for (m of durations; track m) {
+              <button type="button" role="radio" [attr.aria-checked]="duration() === m" [class.on]="duration() === m" (click)="pickDuration(m)">{{ durationLabel(m) }}</button>
+            }
+          </div>
+        </section>
+
+        <!-- Step 3: time -->
+        <section class="step">
+          <h2><span class="n">3</span> Pick a start time</h2>
+          @if (loadingSlots()) {
+            <div class="empty"><div class="ball"></div>Checking the tables…</div>
+          } @else if (!slots().length || !anyFree()) {
+            <div class="empty"><div class="ball"></div>No {{ gameName() }} slots left for this day{{ duration() > 60 ? ' at this length' : '' }}. Try another day{{ duration() > 60 ? ' or a shorter time' : '' }}.</div>
+          } @else {
+            <div class="slots">
+              @for (s of slots(); track s.ts) {
+                <button class="slot" [class.on]="slotTs() === s.ts" [disabled]="!s.free.length" (click)="pickSlot(s)" [attr.aria-pressed]="slotTs() === s.ts">
+                  {{ s.label }}
+                  @if (s.free.length) { <small>{{ s.free.length }} free</small> } @else { <small>Full</small> }
+                </button>
+              }
+            </div>
+          }
+        </section>
+
+        @if (slot(); as s) {
+          <!-- Step 4: details -->
+          <section class="step" id="details">
+            <h2><span class="n">4</span> Your details</h2>
+            <form class="card details" (ngSubmit)="submit()" #f="ngForm">
+              <div class="pick-summary">
+                <div><span class="k">{{ gameName() }}</span><strong>{{ summary() }}</strong></div>
+                @if (s.free.length > 1) {
+                  <label class="field">Table
+                    <select name="table" [ngModel]="tableId()" (ngModelChange)="tableId.set($event)">
+                      @for (t of s.free; track t.id) { <option [ngValue]="t.id">{{ t.name }}</option> }
+                    </select>
+                  </label>
+                } @else {
+                  <div><span class="k">Table</span><strong>{{ chosenTable()?.name }}</strong></div>
+                }
+              </div>
+              <div class="form-grid">
+                <label class="field">Name<input name="name" [(ngModel)]="form.name" required minlength="2" autocomplete="name" /></label>
+                <label class="field">Phone<input name="phone" type="tel" [(ngModel)]="form.phone" required autocomplete="tel" inputmode="tel" placeholder="+91 …" /></label>
+                <label class="field">Email <span class="opt">(optional)</span><input name="email" type="email" [(ngModel)]="form.email" autocomplete="email" /></label>
+                <label class="field">Players<input name="players" type="number" min="1" max="12" [(ngModel)]="form.players" /></label>
+              </div>
+              <label class="field">Anything we should know? <span class="opt">(optional)</span><textarea name="notes" rows="2" [(ngModel)]="form.notes" maxlength="500"></textarea></label>
+              <div class="total">
+                <span>Estimated · {{ durationLabel(duration()) }}</span>
+                <strong>{{ money(estimate()) }}</strong>
+              </div>
+              <button class="btn btn-gold btn-lg" type="submit" [disabled]="busy() || f.invalid">{{ busy() ? 'Holding your table…' : 'Request booking' }}</button>
+              <p class="muted small center">No payment now. You pay at the venue for the time you actually play.</p>
+            </form>
+          </section>
+        }
+      }
+    }
+    <footer class="foot muted small">
+      {{ i.settings.business_name }}{{ i.settings.address ? ' · ' + i.settings.address : '' }}{{ i.settings.phone ? ' · ' + i.settings.phone : '' }}
+      · <a routerLink="/login">Staff sign in</a>
+    </footer>
+  } @else {
+    <div class="empty"><div class="ball"></div>Loading…</div>
+  }
+</div>
